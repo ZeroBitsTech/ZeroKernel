@@ -63,7 +63,7 @@ class ZeroHttpPump {
           emitCompletionEvents(true) {}
   };
 
-  static const uint8_t kQueueCapacity = 4;
+  static const uint8_t kQueueCapacity = ZEROKERNEL_HTTP_PUMP_QUEUE_CAPACITY;
 
   ZeroHttpPump()
       : kernel_(NULL),

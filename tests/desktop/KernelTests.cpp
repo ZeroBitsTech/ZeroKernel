@@ -883,7 +883,11 @@ int testTransportMetricsModule() {
   expectTrue(snapshot.queueDrops == 1, "transport metrics count queue drops");
   expectTrue(snapshot.backoffSchedules == 1, "transport metrics count backoff schedules");
   expectTrue(snapshot.loopCalls == 1, "transport metrics count loop calls");
+#if ZEROKERNEL_ENABLE_NET_EXTENDED_METRICS
   expectTrue(snapshot.worstQueueDwellMs == 11, "transport metrics track queue dwell");
+#else
+  expectTrue(snapshot.worstQueueDwellMs == 0, "transport metrics disable queue dwell in lean mode");
+#endif
   expectTrue(snapshot.maxQueueDepth == 2, "transport metrics track queue depth");
   return g_failures;
 }
@@ -979,12 +983,19 @@ int testHttpPumpModule() {
   expectTrue(g_httpCompletionEvents == 1, "http pump publishes completion event");
   expectTrue(g_httpLastCompletion, "http pump publishes successful completion");
 
-  for (int index = 0; index < 5; ++index) {
+  const int httpEnqueueCount = 5;
+  for (int index = 0; index < httpEnqueueCount; ++index) {
     expectTrue(pump.enqueue(request), "http pump accepts bounded queue item");
   }
   expectTrue(pump.queuedCount() == zerokernel::modules::net::ZeroHttpPump::kQueueCapacity,
              "http pump queue remains bounded");
-  expectTrue(pump.metrics().snapshot().queueDrops == 1, "http pump drops oldest on overflow");
+  const unsigned long expectedHttpDrops =
+      httpEnqueueCount > zerokernel::modules::net::ZeroHttpPump::kQueueCapacity
+          ? static_cast<unsigned long>(httpEnqueueCount -
+                                       zerokernel::modules::net::ZeroHttpPump::kQueueCapacity)
+          : 0UL;
+  expectTrue(pump.metrics().snapshot().queueDrops == expectedHttpDrops,
+             "http pump drops oldest on overflow");
 
   expectTrue(isolatedKernel.unsubscribeTypedFast(completionKey, onHttpCompletionEvent),
              "unsubscribe http completion");
@@ -1052,7 +1063,8 @@ int testMqttPumpModule() {
   expectTrue(pump.queuedCount() == 0, "mqtt pump drains queue after retry success");
   expectTrue(g_mqttLoopCalls >= 2, "mqtt pump calls loop while connected");
 
-  for (int index = 0; index < 7; ++index) {
+  const int mqttEnqueueCount = 7;
+  for (int index = 0; index < mqttEnqueueCount; ++index) {
     expectTrue(
         pump.enqueue(zerokernel::Kernel::makeTopicKey("mqtt.out"),
                      zerokernel::Kernel::EventValue::fromLong(index)),
@@ -1065,7 +1077,12 @@ int testMqttPumpModule() {
              "mqtt pump queue remains bounded");
   expectTrue(mqttMetrics.sendFailures == 1, "mqtt pump records send failure");
   expectTrue(mqttMetrics.sendSuccesses == 1, "mqtt pump records send success");
-  expectTrue(mqttMetrics.queueDrops == 1, "mqtt pump records queue drop");
+  const unsigned long expectedMqttDrops =
+      mqttEnqueueCount > zerokernel::modules::net::ZeroMqttPump::kQueueCapacity
+          ? static_cast<unsigned long>(mqttEnqueueCount -
+                                       zerokernel::modules::net::ZeroMqttPump::kQueueCapacity)
+          : 0UL;
+  expectTrue(mqttMetrics.queueDrops == expectedMqttDrops, "mqtt pump records queue drop");
   expectTrue(mqttMetrics.backoffSchedules == 1, "mqtt pump records publish backoff");
 
   expectTrue(isolatedKernel.unsubscribeTypedFast(stateKey, onMqttStateEvent),

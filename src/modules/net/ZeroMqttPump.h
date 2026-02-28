@@ -48,7 +48,7 @@ class ZeroMqttPump {
           stateTopicKey(0) {}
   };
 
-  static const uint8_t kQueueCapacity = 6;
+  static const uint8_t kQueueCapacity = ZEROKERNEL_MQTT_PUMP_QUEUE_CAPACITY;
 
   ZeroMqttPump()
       : kernel_(NULL),

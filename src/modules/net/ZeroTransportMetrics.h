@@ -33,97 +33,152 @@ class ZeroTransportMetrics {
   }
 
   void reset() {
-    snapshot_.connectAttempts = 0;
-    snapshot_.connectSuccesses = 0;
-    snapshot_.connectFailures = 0;
-    snapshot_.sendAttempts = 0;
-    snapshot_.sendSuccesses = 0;
-    snapshot_.sendFailures = 0;
-    snapshot_.loopCalls = 0;
-    snapshot_.queueDrops = 0;
-    snapshot_.backoffSchedules = 0;
-    snapshot_.consecutiveFailures = 0;
-    snapshot_.lastConnectLatencyMs = 0;
-    snapshot_.worstConnectLatencyMs = 0;
-    snapshot_.lastSendLatencyMs = 0;
-    snapshot_.worstSendLatencyMs = 0;
-    snapshot_.lastQueueDwellMs = 0;
-    snapshot_.worstQueueDwellMs = 0;
-    snapshot_.maxQueueDepth = 0;
+    connectAttempts_ = 0;
+    connectSuccesses_ = 0;
+    connectFailures_ = 0;
+    sendAttempts_ = 0;
+    sendSuccesses_ = 0;
+    sendFailures_ = 0;
+    loopCalls_ = 0;
+    queueDrops_ = 0;
+    backoffSchedules_ = 0;
+    consecutiveFailures_ = 0;
+    maxQueueDepth_ = 0;
+
+#if ZEROKERNEL_ENABLE_NET_EXTENDED_METRICS
+    lastConnectLatencyMs_ = 0;
+    worstConnectLatencyMs_ = 0;
+    lastSendLatencyMs_ = 0;
+    worstSendLatencyMs_ = 0;
+    lastQueueDwellMs_ = 0;
+    worstQueueDwellMs_ = 0;
+#endif
   }
 
   void recordConnectAttempt() {
-    ++snapshot_.connectAttempts;
+    ++connectAttempts_;
   }
 
   void recordConnectResult(bool success, unsigned long latencyMs) {
-    snapshot_.lastConnectLatencyMs = latencyMs;
-    if (latencyMs > snapshot_.worstConnectLatencyMs) {
-      snapshot_.worstConnectLatencyMs = latencyMs;
+#if ZEROKERNEL_ENABLE_NET_EXTENDED_METRICS
+    lastConnectLatencyMs_ = latencyMs;
+    if (latencyMs > worstConnectLatencyMs_) {
+      worstConnectLatencyMs_ = latencyMs;
     }
+#endif
 
     if (success) {
-      ++snapshot_.connectSuccesses;
-      snapshot_.consecutiveFailures = 0;
+      ++connectSuccesses_;
+      consecutiveFailures_ = 0;
       return;
     }
 
-    ++snapshot_.connectFailures;
-    ++snapshot_.consecutiveFailures;
+    ++connectFailures_;
+    ++consecutiveFailures_;
   }
 
   void recordSendQueued(unsigned long queueDepth) {
-    if (queueDepth > snapshot_.maxQueueDepth) {
-      snapshot_.maxQueueDepth = queueDepth;
+    if (queueDepth > maxQueueDepth_) {
+      maxQueueDepth_ = queueDepth;
     }
   }
 
   void recordSendAttempt() {
-    ++snapshot_.sendAttempts;
+    ++sendAttempts_;
   }
 
   void recordSendResult(bool success,
                         unsigned long latencyMs,
                         unsigned long queueDwellMs) {
-    snapshot_.lastSendLatencyMs = latencyMs;
-    snapshot_.lastQueueDwellMs = queueDwellMs;
+#if ZEROKERNEL_ENABLE_NET_EXTENDED_METRICS
+    lastSendLatencyMs_ = latencyMs;
+    lastQueueDwellMs_ = queueDwellMs;
 
-    if (latencyMs > snapshot_.worstSendLatencyMs) {
-      snapshot_.worstSendLatencyMs = latencyMs;
+    if (latencyMs > worstSendLatencyMs_) {
+      worstSendLatencyMs_ = latencyMs;
     }
 
-    if (queueDwellMs > snapshot_.worstQueueDwellMs) {
-      snapshot_.worstQueueDwellMs = queueDwellMs;
+    if (queueDwellMs > worstQueueDwellMs_) {
+      worstQueueDwellMs_ = queueDwellMs;
     }
+#endif
 
     if (success) {
-      ++snapshot_.sendSuccesses;
-      snapshot_.consecutiveFailures = 0;
+      ++sendSuccesses_;
+      consecutiveFailures_ = 0;
       return;
     }
 
-    ++snapshot_.sendFailures;
-    ++snapshot_.consecutiveFailures;
+    ++sendFailures_;
+    ++consecutiveFailures_;
   }
 
   void recordLoopCall() {
-    ++snapshot_.loopCalls;
+    ++loopCalls_;
   }
 
   void recordQueueDrop() {
-    ++snapshot_.queueDrops;
+    ++queueDrops_;
   }
 
   void recordBackoffSchedule() {
-    ++snapshot_.backoffSchedules;
+    ++backoffSchedules_;
   }
 
-  const Snapshot& snapshot() const {
-    return snapshot_;
+  Snapshot snapshot() const {
+    Snapshot snapshot;
+    snapshot.connectAttempts = connectAttempts_;
+    snapshot.connectSuccesses = connectSuccesses_;
+    snapshot.connectFailures = connectFailures_;
+    snapshot.sendAttempts = sendAttempts_;
+    snapshot.sendSuccesses = sendSuccesses_;
+    snapshot.sendFailures = sendFailures_;
+    snapshot.loopCalls = loopCalls_;
+    snapshot.queueDrops = queueDrops_;
+    snapshot.backoffSchedules = backoffSchedules_;
+    snapshot.consecutiveFailures = consecutiveFailures_;
+    snapshot.maxQueueDepth = maxQueueDepth_;
+
+#if ZEROKERNEL_ENABLE_NET_EXTENDED_METRICS
+    snapshot.lastConnectLatencyMs = lastConnectLatencyMs_;
+    snapshot.worstConnectLatencyMs = worstConnectLatencyMs_;
+    snapshot.lastSendLatencyMs = lastSendLatencyMs_;
+    snapshot.worstSendLatencyMs = worstSendLatencyMs_;
+    snapshot.lastQueueDwellMs = lastQueueDwellMs_;
+    snapshot.worstQueueDwellMs = worstQueueDwellMs_;
+#else
+    snapshot.lastConnectLatencyMs = 0;
+    snapshot.worstConnectLatencyMs = 0;
+    snapshot.lastSendLatencyMs = 0;
+    snapshot.worstSendLatencyMs = 0;
+    snapshot.lastQueueDwellMs = 0;
+    snapshot.worstQueueDwellMs = 0;
+#endif
+
+    return snapshot;
   }
 
  private:
-  Snapshot snapshot_;
+  unsigned long connectAttempts_;
+  unsigned long connectSuccesses_;
+  unsigned long connectFailures_;
+  unsigned long sendAttempts_;
+  unsigned long sendSuccesses_;
+  unsigned long sendFailures_;
+  unsigned long loopCalls_;
+  unsigned long queueDrops_;
+  unsigned long backoffSchedules_;
+  unsigned long consecutiveFailures_;
+  unsigned long maxQueueDepth_;
+
+#if ZEROKERNEL_ENABLE_NET_EXTENDED_METRICS
+  unsigned long lastConnectLatencyMs_;
+  unsigned long worstConnectLatencyMs_;
+  unsigned long lastSendLatencyMs_;
+  unsigned long worstSendLatencyMs_;
+  unsigned long lastQueueDwellMs_;
+  unsigned long worstQueueDwellMs_;
+#endif
 };
 
 }  // namespace net
