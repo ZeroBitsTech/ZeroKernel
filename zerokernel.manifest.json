@@ -2,7 +2,7 @@
   "kernel": "ZeroKernel",
   "vendor": "ZeroBits",
   "tagline": "Small Bits. Solid Systems.",
-  "runtime_version": "1.2.0",
+  "runtime_version": "1.3.0",
   "abi_version": 1,
   "model": "Embedded Execution Runtime",
   "execution": {
@@ -27,6 +27,11 @@
     "kernel_state_model": true,
     "panic_handler": true,
     "execution_contract": true
+  },
+  "capabilities": {
+    "task_scoped_requirements": true,
+    "runtime_mask": true,
+    "safe_mode_mask": true
   },
   "portability": {
     "arduino": true,

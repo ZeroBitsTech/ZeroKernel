@@ -13,7 +13,7 @@ ZeroKernel is designed for firmware that has outgrown ad-hoc `loop()` code but d
 - Deterministic cooperative scheduling
 - Fixed-capacity runtime with no dynamic allocation in the active path
 - Key-based event and command routing for lean builds
-- Watchdog, safe mode, panic routing, and execution contracts
+- Watchdog, safe mode, panic routing, execution contracts, and capability masks
 - Build profiles that scale from small always-on nodes to diagnostics-heavy bring-up
 
 The intended position is simple:
@@ -28,7 +28,7 @@ The intended position is simple:
 - Fixed-size task registry and bounded queues
 - Pub/sub events, command queue, work queue, and cooperative event flags
 - Watchdog supervision with heartbeat timeout, overrun handling, recovery, and safe mode
-- Runtime identity, ABI version, manifest, timing reports, and diagnostics hooks
+- Runtime identity, ABI version, manifest, timing reports, diagnostics hooks, and task-scoped capability gating
 - Low-level internal helpers for cycle counting and idle hints, including C and assembly where it actually helps
 
 ## Current Runtime Snapshot
@@ -60,6 +60,8 @@ Tradeoff summary:
 - Flash overhead: `+3344 bytes`
 - Determinism maintained: `0 lag`, `0 misses`
 - Measured free heap on Wemos diagnostics: `49280`
+
+That overhead buys bounded scheduling, watchdog supervision, panic flow, capability-aware task gating, and fixed-capacity queues. On ESP8266-class hardware the measured free heap remains comfortably high, so the extra runtime footprint is a small and controlled tradeoff rather than a practical memory risk.
 
 ## Install
 
@@ -178,6 +180,25 @@ If diagnostics are enabled:
 ZeroKernel.dumpStats(printLine);
 ZeroKernel.dumpTasks(printLine);
 ZeroKernel.dumpTrace(printLine);
+```
+
+### 8. Gate tasks by capability when you need subsystem control
+
+```cpp
+zerokernel::Kernel::TaskConfig wifiTask = {
+    "WiFiNode",
+    pollWifi,
+    100,
+    0,
+    0,
+    zerokernel::Kernel::kPriorityHigh,
+    true,
+    {},
+    zerokernel::Kernel::kCapNetwork | zerokernel::Kernel::kCapTelemetry};
+
+ZeroKernel.addTask(wifiTask);
+ZeroKernel.disableCapabilities(zerokernel::Kernel::kCapNetwork);
+// WiFiNode will stay registered but will not be scheduled until the capability is re-enabled.
 ```
 
 ### Minimal full sketch

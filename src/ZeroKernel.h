@@ -13,6 +13,7 @@ class Kernel {
   typedef unsigned long TimeMs;
   typedef uint32_t TopicKey;
   typedef uint32_t EventFlags;
+  typedef uint32_t CapabilityMask;
   typedef void (*TaskCallback)();
   typedef void (*EventHandler)(const char* topic, long value);
   struct EventValue;
@@ -87,6 +88,19 @@ class Kernel {
     kPanicFreeze = 1,
     kPanicEnterSafeMode = 2,
     kPanicRebootCallback = 3
+  };
+
+  enum Capability : uint32_t {
+    kCapNone = 0U,
+    kCapIO = 1U << 0,
+    kCapNetwork = 1U << 1,
+    kCapStorage = 1U << 2,
+    kCapTelemetry = 1U << 3,
+    kCapDiagnostics = 1U << 4,
+    kCapRadio = 1U << 5,
+    kCapControl = 1U << 6,
+    kCapCustom0 = 1U << 7,
+    kCapAll = 0xFFFFFFFFU
   };
 
   enum ContractFlag : uint8_t {
@@ -171,6 +185,7 @@ class Kernel {
     uint8_t priority;
     bool startEnabled;
     ExecutionContract contract;
+    CapabilityMask requiredCapabilities;
   };
 
   struct TaskStats {
@@ -193,6 +208,7 @@ class Kernel {
     uint8_t failureBudget;
     uint8_t panicMode;
     uint8_t safeModePriorityFloor;
+    CapabilityMask requiredCapabilities;
     TaskState state;
   };
 
@@ -294,6 +310,12 @@ class Kernel {
   HardwareWatchdogBridge getHardwareWatchdogBridge() const;
   void setIdleStrategy(uint8_t idleStrategy);
   uint8_t getIdleStrategy() const;
+  void setCapabilities(CapabilityMask capabilities);
+  CapabilityMask capabilities() const;
+  void enableCapabilities(CapabilityMask capabilities);
+  void disableCapabilities(CapabilityMask capabilities);
+  void setSafeModeCapabilities(CapabilityMask capabilities);
+  CapabilityMask safeModeCapabilities() const;
   void onStateChange(StateChangeHandler handler);
   uint8_t state() const;
   void setPanicHandler(PanicHandler handler);
@@ -401,6 +423,7 @@ class Kernel {
 #endif
     uint32_t runCount;
     uint16_t maxRuntimeUs;
+    CapabilityMask requiredCapabilities;
     uint16_t failureCount;
     uint8_t priority;
     uint8_t contractFlags;
@@ -519,6 +542,8 @@ class Kernel {
   uint8_t traceTail_;
   uint8_t traceCount_;
   volatile EventFlags eventFlags_;
+  CapabilityMask capabilityMask_;
+  CapabilityMask safeModeCapabilityMask_;
   uint8_t kernelState_;
   bool safeMode_;
   uint8_t safeModePriorityFloor_;
@@ -569,6 +594,7 @@ class Kernel {
   bool dropOldestWork_();
   int selectNextRunnableTask_(TimeMs nowMs) const;
   void emitSignal_(uint8_t type, const char* label, unsigned long value);
+  bool hasTaskCapabilities_(const TaskSlot& slot) const;
 
   int findTaskIndex_(const char* name) const;
   int findFreeTaskIndex_() const;

@@ -25,6 +25,8 @@ Kernel::Kernel()
       traceTail_(0),
       traceCount_(0),
       eventFlags_(0),
+      capabilityMask_(kCapAll),
+      safeModeCapabilityMask_(kCapAll),
       kernelState_(kStateBoot),
       safeMode_(false),
       safeModePriorityFloor_(kPriorityHigh),
@@ -358,6 +360,10 @@ int Kernel::selectNextRunnableTask_(TimeMs nowMs) const {
   for (uint8_t i = 0; i < kMaxTasks; ++i) {
     const TaskSlot& slot = tasks_[i];
     if (!isTaskDue_(slot, nowMs)) {
+      continue;
+    }
+
+    if (!hasTaskCapabilities_(slot)) {
       continue;
     }
 

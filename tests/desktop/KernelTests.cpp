@@ -107,6 +107,18 @@ void lowPriorityTask() {
   }
 }
 
+void networkCapabilityTask() {
+  if (g_orderIndex < 8) {
+    g_orderLog[g_orderIndex++] = 'N';
+  }
+}
+
+void storageCapabilityTask() {
+  if (g_orderIndex < 8) {
+    g_orderLog[g_orderIndex++] = 'S';
+  }
+}
+
 void onSignal(const zerokernel::Kernel::KernelSignal& signal) {
   if (signal.type == zerokernel::Kernel::kSignalDeadlineMiss ||
       signal.type == zerokernel::Kernel::kSignalEventDrop ||
@@ -326,9 +338,9 @@ int testNextWakeHint() {
 int testPriorityScheduling() {
   zerokernel::Kernel isolatedKernel;
   zerokernel::Kernel::TaskConfig low = {
-      "Low", lowPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityLow, true, {}};
+      "Low", lowPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityLow, true, {}, zerokernel::Kernel::kCapNone};
   zerokernel::Kernel::TaskConfig high = {
-      "High", highPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityCritical, true, {}};
+      "High", highPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityCritical, true, {}, zerokernel::Kernel::kCapNone};
 
   g_orderIndex = 0;
   g_orderLog[0] = '\0';
@@ -353,9 +365,9 @@ int testPriorityScheduling() {
 int testSafeMode() {
   zerokernel::Kernel isolatedKernel;
   zerokernel::Kernel::TaskConfig low = {
-      "LowSafe", lowPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityLow, true, {}};
+      "LowSafe", lowPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityLow, true, {}, zerokernel::Kernel::kCapNone};
   zerokernel::Kernel::TaskConfig high = {
-      "HighSafe", highPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityCritical, true, {}};
+      "HighSafe", highPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityCritical, true, {}, zerokernel::Kernel::kCapNone};
 
   g_orderIndex = 0;
   g_orderLog[0] = '\0';
@@ -386,10 +398,73 @@ int testGovernanceMetadata() {
   expectTrue(isolatedKernel.state() == zerokernel::Kernel::kStateBoot, "boot state default");
   expectTrue(isolatedKernel.getIdleStrategy() == zerokernel::Kernel::kIdlePlatformHint,
              "default idle strategy");
+  expectTrue(isolatedKernel.capabilities() == zerokernel::Kernel::kCapAll,
+             "default capabilities enabled");
+  expectTrue(isolatedKernel.safeModeCapabilities() == zerokernel::Kernel::kCapAll,
+             "default safe-mode capabilities enabled");
 
   isolatedKernel.setIdleStrategy(zerokernel::Kernel::kIdleYield);
   expectTrue(isolatedKernel.getIdleStrategy() == zerokernel::Kernel::kIdleYield,
              "idle strategy updates");
+  return g_failures;
+}
+
+int testCapabilityRouting() {
+  zerokernel::Kernel isolatedKernel;
+  zerokernel::Kernel::TaskConfig networkTask = {
+      "NetworkTask",
+      networkCapabilityTask,
+      10,
+      0,
+      0,
+      zerokernel::Kernel::kPriorityNormal,
+      true,
+      {},
+      zerokernel::Kernel::kCapNetwork};
+  zerokernel::Kernel::TaskConfig storageTask = {
+      "StorageTask",
+      storageCapabilityTask,
+      10,
+      0,
+      0,
+      zerokernel::Kernel::kPriorityNormal,
+      true,
+      {},
+      zerokernel::Kernel::kCapStorage};
+
+  g_orderIndex = 0;
+  g_orderLog[0] = '\0';
+
+  isolatedKernel.setCapabilities(zerokernel::Kernel::kCapNetwork |
+                                 zerokernel::Kernel::kCapStorage);
+  isolatedKernel.setSafeModeCapabilities(zerokernel::Kernel::kCapStorage);
+
+  expectTrue(isolatedKernel.addTask(networkTask), "add network capability task");
+  expectTrue(isolatedKernel.addTask(storageTask), "add storage capability task");
+
+  isolatedKernel.tick(0);
+  isolatedKernel.tick(10);
+  expectTrue(g_orderIndex == 2, "both capability tasks run when enabled");
+
+  g_orderIndex = 0;
+  isolatedKernel.disableCapabilities(zerokernel::Kernel::kCapStorage);
+  isolatedKernel.tick(20);
+  expectTrue(g_orderIndex == 1, "disabled capability blocks task");
+  expectTrue(g_orderLog[0] == 'N', "network task still runs");
+
+  g_orderIndex = 0;
+  isolatedKernel.enableCapabilities(zerokernel::Kernel::kCapStorage);
+  isolatedKernel.enterSafeMode(zerokernel::Kernel::kPriorityLow);
+  isolatedKernel.tick(30);
+  expectTrue(g_orderIndex == 1, "safe mode capability mask narrows task set");
+  expectTrue(g_orderLog[0] == 'S', "safe mode allowed storage task");
+
+  zerokernel::Kernel::TaskStats stats;
+  expectTrue(isolatedKernel.getTaskStats("StorageTask", stats), "read capability task stats");
+  expectTrue(stats.requiredCapabilities == zerokernel::Kernel::kCapStorage,
+             "task stats expose required capabilities");
+
+  isolatedKernel.exitSafeMode();
   return g_failures;
 }
 
@@ -409,7 +484,8 @@ int testStateAndPanicFlow() {
       0,
       zerokernel::Kernel::kPriorityCritical,
       true,
-      contract};
+      contract,
+      zerokernel::Kernel::kCapNone};
 
   g_fakeNowMs = 0;
   g_stateChanges = 0;
@@ -611,6 +687,7 @@ int main() {
   testPriorityScheduling();
   testSafeMode();
   testGovernanceMetadata();
+  testCapabilityRouting();
   testStateAndPanicFlow();
   testDeadlineMetrics();
   testTimingReport();

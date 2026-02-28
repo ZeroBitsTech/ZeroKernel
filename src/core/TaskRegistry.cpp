@@ -9,7 +9,15 @@ bool Kernel::addTask(const char* name,
                      TimeMs maxRuntimeMs,
                      bool startEnabled) {
   TaskConfig config = {
-      name, callback, intervalMs, maxRuntimeMs, 0, kPriorityNormal, startEnabled, ExecutionContract()};
+      name,
+      callback,
+      intervalMs,
+      maxRuntimeMs,
+      0,
+      kPriorityNormal,
+      startEnabled,
+      ExecutionContract(),
+      kCapNone};
   return addTask(config);
 }
 
@@ -154,6 +162,7 @@ bool Kernel::getTaskStats(const char* name, TaskStats& outStats) const {
   outStats.failureBudget = slot.failureBudget;
   outStats.panicMode = slot.panicMode;
   outStats.safeModePriorityFloor = slot.safeModePriorityFloor;
+  outStats.requiredCapabilities = slot.requiredCapabilities;
   outStats.state = slot.state;
   return true;
 }
@@ -200,6 +209,7 @@ uint8_t Kernel::snapshotTasks(TaskStats* buffer, uint8_t capacity) const {
     outStats.failureBudget = tasks_[i].failureBudget;
     outStats.panicMode = tasks_[i].panicMode;
     outStats.safeModePriorityFloor = tasks_[i].safeModePriorityFloor;
+    outStats.requiredCapabilities = tasks_[i].requiredCapabilities;
     outStats.state = tasks_[i].state;
     ++count;
   }

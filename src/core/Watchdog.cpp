@@ -10,6 +10,30 @@ uint8_t Kernel::getIdleStrategy() const {
   return idleStrategy_;
 }
 
+void Kernel::setCapabilities(CapabilityMask capabilities) {
+  capabilityMask_ = capabilities;
+}
+
+Kernel::CapabilityMask Kernel::capabilities() const {
+  return capabilityMask_;
+}
+
+void Kernel::enableCapabilities(CapabilityMask capabilities) {
+  capabilityMask_ |= capabilities;
+}
+
+void Kernel::disableCapabilities(CapabilityMask capabilities) {
+  capabilityMask_ &= ~capabilities;
+}
+
+void Kernel::setSafeModeCapabilities(CapabilityMask capabilities) {
+  safeModeCapabilityMask_ = capabilities;
+}
+
+Kernel::CapabilityMask Kernel::safeModeCapabilities() const {
+  return safeModeCapabilityMask_;
+}
+
 void Kernel::onStateChange(StateChangeHandler handler) {
   stateChangeHandler_ = handler;
 }
@@ -124,6 +148,7 @@ void Kernel::initializeTaskSlot_(TaskSlot& slot,
   slot.failureBudget = config.contract.failureBudget;
   slot.panicMode = config.contract.panicMode;
   slot.safeModePriorityFloor = config.contract.safeModePriorityFloor;
+  slot.requiredCapabilities = config.requiredCapabilities;
 #if ZEROKERNEL_ENABLE_EXTENDED_TASK_METRICS
   slot.lastLagMs = 0;
   slot.maxLagMs = 0;
@@ -304,6 +329,23 @@ void Kernel::setKernelState_(uint8_t nextState) {
   if (stateChangeHandler_ != NULL) {
     stateChangeHandler_(kernelState_);
   }
+}
+
+bool Kernel::hasTaskCapabilities_(const TaskSlot& slot) const {
+  if (!slot.inUse) {
+    return false;
+  }
+
+  if (slot.requiredCapabilities == kCapNone) {
+    return true;
+  }
+
+  CapabilityMask activeCapabilities = capabilityMask_;
+  if (safeMode_) {
+    activeCapabilities &= safeModeCapabilityMask_;
+  }
+
+  return (slot.requiredCapabilities & activeCapabilities) == slot.requiredCapabilities;
 }
 
 }  // namespace zerokernel

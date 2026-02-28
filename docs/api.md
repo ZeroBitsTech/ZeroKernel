@@ -24,6 +24,7 @@
   - `kContractCritical`
   - `kContractDropIfLate`
   - `kContractAllowDegrade`
+- `requiredCapabilities`: bitmask of runtime capabilities required before the task is eligible to run.
 
 ## Watchdog
 
@@ -34,6 +35,12 @@
 - `getHardwareWatchdogBridge()`: returns the current bridge settings.
 - `setIdleStrategy(strategy)`: configures the runtime idle policy.
 - `getIdleStrategy()`: returns the active idle policy.
+- `setCapabilities(mask)`: replaces the currently enabled runtime capability mask.
+- `capabilities()`: returns the active runtime capability mask.
+- `enableCapabilities(mask)`: enables one or more runtime capabilities.
+- `disableCapabilities(mask)`: disables one or more runtime capabilities.
+- `setSafeModeCapabilities(mask)`: defines which capabilities remain active while safe mode is enabled.
+- `safeModeCapabilities()`: returns the safe-mode capability mask.
 - `onStateChange(handler)`: installs a callback for kernel state changes.
 - `state()`: returns the active kernel state.
 - `setPanicHandler(handler)`: installs a panic callback.
@@ -84,6 +91,19 @@
 - `kPanicFreeze`
 - `kPanicEnterSafeMode`
 - `kPanicRebootCallback`
+
+`Capability` values:
+
+- `kCapNone`
+- `kCapIO`
+- `kCapNetwork`
+- `kCapStorage`
+- `kCapTelemetry`
+- `kCapDiagnostics`
+- `kCapRadio`
+- `kCapControl`
+- `kCapCustom0`
+- `kCapAll`
 
 ## Events
 
@@ -169,3 +189,5 @@ Key counters exposed by `KernelStats`:
 - `queuedEventsDropped`
 - `queuedCommandsDropped`
 - `queuedWorkDropped`
+
+`TaskStats.requiredCapabilities` reports the task capability mask exactly as registered.
