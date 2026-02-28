@@ -72,6 +72,7 @@ void setup() {
   delay(50);
 
   ZeroKernel.begin(boardMillis);
+  ZeroKernel.setIdleStrategy(zerokernel::Kernel::kIdleSleep);
   ZeroKernel.subscribeTypedFast(kBrokerStateTopic, onStateEvent);
 
   ZeroMqttPump::Config config;

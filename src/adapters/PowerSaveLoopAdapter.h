@@ -14,8 +14,7 @@ namespace adapters {
 inline void idleHint() {
   internal::idleCpu();
 
-#if defined(ARDUINO) && !defined(__arm__) && !defined(__thumb__) && !defined(__riscv) && \
-    !defined(__XTENSA__)
+#if defined(ARDUINO)
   yield();
 #endif
 }

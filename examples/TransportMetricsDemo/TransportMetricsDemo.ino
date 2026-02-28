@@ -48,6 +48,7 @@ void setup() {
   delay(50);
 
   ZeroKernel.begin(boardMillis);
+  ZeroKernel.setIdleStrategy(zerokernel::Kernel::kIdleSleep);
   ZeroKernel.addTask("MetricsTick", updateMetricsTask, 500, 0);
   ZeroKernel.addTask("MetricsReport", reportTask, 1000, 0);
 }

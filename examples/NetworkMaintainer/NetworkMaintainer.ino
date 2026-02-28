@@ -74,6 +74,7 @@ void setup() {
   WiFi.persistent(false);
 
   ZeroKernel.begin(boardMillis);
+  ZeroKernel.setIdleStrategy(zerokernel::Kernel::kIdleSleep);
   ZeroKernel.subscribeTypedFast(kWiFiStateTopic, onWiFiState);
 
   ZeroWiFiMaintainer::Config config;
