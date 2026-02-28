@@ -114,6 +114,51 @@ BASELINE_SEISMIC window_ms=5009 sample_runs=476 fast_avg_lag_us=5393 fast_max_la
 ZEROKERNEL_SEISMIC window_ms=5000 sample_runs=501 fast_avg_lag_us=6 fast_max_lag_us=2378 fast_miss=1 queue_max=3 sent_ok=7 sent_fail=0 captures=7 clients=1
 ```
 
+Representative baseline vs ZeroKernel shape from the seismic firmware:
+
+Baseline-style direct loop:
+
+```cpp
+void loop() {
+  const unsigned long nowUs = micros();
+  trackSampleTiming(nowUs);
+  ++sampleRuns;
+
+  readAccel(ax, ay, az);
+  updateMotionModel();
+
+  if (shouldSend && canCapture) {
+    capturePacket(true);
+  } else if (heartbeatDue() && hasDirectClient()) {
+    capturePacket(false);
+  }
+
+  flushQueueOnce();
+  delay(LOOP_DELAY_MS);
+}
+```
+
+ZeroKernel rewrite:
+
+```cpp
+void setup() {
+  ZeroKernel.begin(zerokernel::adapters::arduinoMillisClock);
+
+  ZeroKernel.addTask(sampleTask);
+  ZeroKernel.addTask(heartbeatTaskConfig);
+  ZeroKernel.addTask(flushTask);
+  ZeroKernel.addTask(buzzerTaskConfig);
+  ZeroKernel.addTask(tempTask);
+  ZeroKernel.addTask(statusTask);
+}
+
+void loop() {
+  ZeroKernel.tick();
+}
+```
+
+That rewrite is the practical difference: the same node behavior is split into bounded, phase-aligned tasks instead of one blocking loop that mixes sensing, transport, alarms, and status work together.
+
 ## ESP32 Telemetry Parity
 
 The richer ESP32 telemetry workload is also now phase-aligned after the runtime scheduling fix:
