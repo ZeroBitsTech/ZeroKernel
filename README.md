@@ -147,31 +147,33 @@ void loop() {
 ZeroKernel rewrite:
 
 ```cpp
+void sampleSensorTask() {
+  trackSampleTiming(micros());
+  ++sampleRuns;
+
+  float ax = 0.0f;
+  float ay = 0.0f;
+  float az = 1.0f;
+  readAccel(ax, ay, az);
+  updateMotionModel(ax, ay, az);
+
+  if (shouldSend && canCapture) {
+    capturePacket(true);
+  }
+}
+
 void setup() {
   ZeroKernel.begin(zerokernel::adapters::arduinoMillisClock);
 
-  zerokernel::Kernel::TaskConfig sampleTask = {
-      "Sample",
-      sampleSensorTask,
-      LOOP_DELAY_MS,
-      4,
-      0,
-      zerokernel::Kernel::kPriorityCritical,
-      true,
-      {0,
-       static_cast<uint8_t>(zerokernel::Kernel::kContractRunImmediate |
-                            zerokernel::Kernel::kContractDropIfLate),
-       0,
-       0,
-       0},
-      zerokernel::Kernel::kCapIO};
-
-  ZeroKernel.addTask(sampleTask);
-  ZeroKernel.addTask(flushTask);
-  ZeroKernel.addTask(heartbeatTaskConfig);
+  ZeroKernel.addTask("Sample", sampleSensorTask, LOOP_DELAY_MS, 4);
+  ZeroKernel.addTask("Flush", queueFlushTask, 120, 3);
+  ZeroKernel.addTask("Heartbeat", heartbeatTask, 25, 2);
   ZeroKernel.addTask(buzzerTaskConfig);
   ZeroKernel.addTask(tempTask);
   ZeroKernel.addTask(statusTask);
+
+  ZeroKernel.setTaskPriority("Sample", zerokernel::Kernel::kPriorityCritical);
+  ZeroKernel.setTaskPriority("Flush", zerokernel::Kernel::kPriorityLow);
 }
 
 void loop() {
