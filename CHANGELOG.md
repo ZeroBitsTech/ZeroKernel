@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added generic compare workloads for `EnvMonitor`, `TelemetryGateway`, and `IndustrialLoop`.
+- Added repeatable ESP32 compare runners plus a cross-target workload compile matrix.
+- Improved telemetry gateway tuning so module throughput rises without queue buildup.
+- Fixed command handler registration so lean profiles fail safely instead of link-breaking.
 - Added GitHub Actions CI and tag-driven release workflow.
 - Added wiki-ready documentation pages under `docs/wiki/`.
 - Added `RealProjectNode` as a more realistic network workload example.
