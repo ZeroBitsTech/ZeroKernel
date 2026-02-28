@@ -42,6 +42,25 @@ Latest measured references:
 
 These are regression references, not marketing numbers. The most important gate is still deterministic timing.
 
+## Before vs After
+
+Measured on Wemos D1 mini using the blocking baseline and the current ZeroKernel compare sketch:
+
+| Metric | Before (blocking) | After (ZeroKernel) |
+| --- | ---: | ---: |
+| RAM usage | `28300 / 80192` | `29044 / 80192` |
+| Flash usage | `237092 / 1048576` | `240436 / 1048576` |
+| Fast avg lag | `2916 us` | `0 us` |
+| Fast max lag | `12112 us` | `0 us` |
+| Fast misses | `126` | `0` |
+
+Tradeoff summary:
+
+- RAM overhead: `+744 bytes`
+- Flash overhead: `+3344 bytes`
+- Determinism maintained: `0 lag`, `0 misses`
+- Measured free heap on Wemos diagnostics: `49280`
+
 ## Quick Start
 
 ```cpp
@@ -68,6 +87,96 @@ const zerokernel::Kernel::TopicKey telemetryKey =
     zerokernel::Kernel::makeTopicKey("telemetry.temperature");
 
 ZeroKernel.publishDeferredFast(telemetryKey, 42);
+```
+
+## How To Use
+
+### 1. Add the library
+
+Put ZeroKernel in your Arduino libraries folder or include it directly in your firmware project.
+
+### 2. Start the runtime
+
+```cpp
+ZeroKernel.begin(millis);
+```
+
+For desktop or custom targets, pass your own clock source:
+
+```cpp
+unsigned long boardClock() {
+  return millis();
+}
+
+ZeroKernel.begin(boardClock);
+```
+
+### 3. Register non-blocking tasks
+
+```cpp
+void sampleSensors() {
+  // Non-blocking work only.
+}
+
+void flushTelemetry() {
+  // Keep this short and cooperative.
+}
+
+ZeroKernel.addTask("Sensors", sampleSensors, 100, 5);
+ZeroKernel.addTask("Telemetry", flushTelemetry, 500, 10);
+```
+
+### 4. Tick the kernel inside `loop()`
+
+```cpp
+void loop() {
+  ZeroKernel.tick();
+}
+```
+
+### 5. Use events or fast topic keys
+
+String route:
+
+```cpp
+ZeroKernel.publishDeferred("telemetry.temperature", 42);
+```
+
+Lean key route:
+
+```cpp
+const zerokernel::Kernel::TopicKey temperatureKey =
+    zerokernel::Kernel::makeTopicKey("telemetry.temperature");
+
+ZeroKernel.publishDeferredFast(temperatureKey, 42);
+```
+
+### 6. Add watchdog and recovery policy
+
+```cpp
+zerokernel::Kernel::WatchdogPolicy policy = {250, 2, true};
+ZeroKernel.setWatchdogPolicy(policy);
+ZeroKernel.setTaskHeartbeatTimeout("Sensors", 300);
+ZeroKernel.heartbeatTask("Sensors");
+```
+
+### 7. Inspect runtime state
+
+```cpp
+const zerokernel::Kernel::KernelStats stats = ZeroKernel.getStats();
+const zerokernel::Kernel::TimingReport timing = ZeroKernel.getTimingReport();
+
+if (ZeroKernel.isSafeMode()) {
+  ZeroKernel.exitSafeMode();
+}
+```
+
+If diagnostics are enabled:
+
+```cpp
+ZeroKernel.dumpStats(printLine);
+ZeroKernel.dumpTasks(printLine);
+ZeroKernel.dumpTrace(printLine);
 ```
 
 ## Validation Pipeline
