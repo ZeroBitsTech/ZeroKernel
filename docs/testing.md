@@ -97,6 +97,40 @@ This compares the fault-oriented workload against a manual-loop baseline and rep
 - RAM deltas
 - ending runtime state
 
+## General-purpose workload compares
+
+- `scripts/run_esp32_env_monitor_compare.sh [/dev/ttyUSB1]`
+
+This compares a simple sensor-monitor workload against a manual-loop baseline and reports:
+
+- sample cadence
+- filter cadence
+- fast-cycle lag and misses
+- RAM deltas
+
+- `scripts/run_esp32_gateway_compare.sh [/dev/ttyUSB1]`
+
+This compares a credential-free transport gateway workload against a manual-loop baseline and reports:
+
+- Wi-Fi maintenance attempts and reconnects
+- HTTP and MQTT success/failure counts
+- effective success rates
+- queue depth and RAM deltas
+
+- `scripts/run_esp32_industrial_compare.sh [/dev/ttyUSB1]`
+
+This compares a control-loop workload against a manual-loop baseline and reports:
+
+- control-loop cadence
+- command handling cadence
+- fast-cycle lag and misses
+- safe-mode entries and recoveries
+- RAM deltas
+
+- `scripts/run_workload_matrix.sh`
+
+This compiles the three workload pairs across the installed Arduino cores (ESP8266, ESP32, RP2040, STM32) and prints per-target PASS lines with RAM and flash usage.
+
 ## Cross-board command smoke
 
 - `examples/CommandQueue`

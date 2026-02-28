@@ -117,6 +117,37 @@ Current best module tradeoff reference (ESP32, `LEAN_NET`, manual pattern vs mod
 
 In other words: the modules do cost memory, but the current tuned path keeps that cost bounded and pays it back with better transport throughput and less queue buildup under the same synthetic workload window.
 
+## General-Purpose Validation Workloads
+
+To avoid overfitting the runtime to a single project, ZeroKernel now also ships with three reusable compare workloads:
+
+- `EnvMonitor`: sensor sampling + filtering + threshold alarm
+- `TelemetryGateway`: queue-heavy transport orchestration without tying the example to real Wi-Fi credentials
+- `IndustrialLoop`: fast control loop + command handling + diagnostics + safe-mode recovery
+
+Current ESP32 references from the compare runners:
+
+- `EnvMonitor`
+  - `sample_runs`: `49 -> 50`
+  - `fast_avg_lag_us`: `871 -> 0`
+  - `fast_max_lag_us`: `1780 -> 0`
+  - `fast_miss`: `24 -> 0`
+- `TelemetryGateway`
+  - `http_ok`: `23 -> 27`
+  - `mqtt_ok`: `23 -> 27`
+  - `http_rate`: `88 -> 87`
+  - `mqtt_rate`: `92 -> 90`
+  - `http_queue`: `0 -> 0`
+  - `mqtt_queue`: `0 -> 0`
+- `IndustrialLoop`
+  - `control_runs`: `99 -> 101`
+  - `fast_avg_lag_us`: `241 -> 0`
+  - `fast_max_lag_us`: `3983 -> 0`
+  - `fast_miss`: `9 -> 0`
+  - `recoveries`: `0 -> 1`
+
+These workloads are intentionally broader than the micro-benchmarks: they show the runtime under sensor, transport, and control-loop pressure without depending on a single application codebase.
+
 ## Field Validation: ESP8266 Seismic Node
 
 Measured on a real `ESP8266` direct-AP seismic node using:

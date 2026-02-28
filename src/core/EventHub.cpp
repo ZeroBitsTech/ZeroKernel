@@ -467,11 +467,18 @@ bool Kernel::registerCommand(const char* command, CommandHandler handler) {
   const TopicKey commandKey = topicKey_(command);
   return registerCommandFast(
       commandKey, handler, ZEROKERNEL_ENABLE_LEGACY_LABEL_API ? command : NULL);
+#endif
 }
 
 bool Kernel::registerCommandFast(TopicKey commandKey,
                                  CommandHandler handler,
                                  const char* commandLabel) {
+#if !ZEROKERNEL_ENABLE_COMMAND_QUEUE
+  (void)commandKey;
+  (void)handler;
+  (void)commandLabel;
+  return false;
+#else
   if (commandKey == 0U || handler == NULL) {
     return false;
   }
