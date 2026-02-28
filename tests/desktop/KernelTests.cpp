@@ -940,20 +940,10 @@ int testHttpPumpModule() {
   g_fakeNowMs = 2;
   isolatedKernel.tick();
   pump.tick();
-  expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseWriting,
-             "http pump advances to write phase");
-
-  g_fakeNowMs = 3;
-  isolatedKernel.tick();
-  pump.tick();
-  expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseReading,
-             "http pump advances to read phase");
-
-  g_fakeNowMs = 4;
-  isolatedKernel.tick();
-  pump.tick();
   expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseConnecting,
-             "http pump retries after read failure");
+             "http pump retries after collapsed phase failure");
+  expectTrue(g_httpWriteCalls == 1, "http pump collapses write phase in same tick");
+  expectTrue(g_httpReadCalls == 1, "http pump collapses read phase in same tick");
 
   g_fakeNowMs = 10;
   isolatedKernel.tick();
@@ -961,15 +951,6 @@ int testHttpPumpModule() {
   expectTrue(g_httpConnectCalls == 2, "http pump waits for retry window");
 
   g_fakeNowMs = 24;
-  isolatedKernel.tick();
-  pump.tick();
-  g_fakeNowMs = 25;
-  isolatedKernel.tick();
-  pump.tick();
-  g_fakeNowMs = 26;
-  isolatedKernel.tick();
-  pump.tick();
-  g_fakeNowMs = 27;
   isolatedKernel.tick();
   pump.tick();
 

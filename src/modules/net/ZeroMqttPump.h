@@ -49,6 +49,7 @@ class ZeroMqttPump {
   };
 
   static const uint8_t kQueueCapacity = ZEROKERNEL_MQTT_PUMP_QUEUE_CAPACITY;
+  static const uint8_t kPublishBurstPerTick = 2;
 
   ZeroMqttPump()
       : kernel_(NULL),
@@ -182,21 +183,24 @@ class ZeroMqttPump {
     }
 
     pendingRetryAtMs_ = 0;
-    metrics_.recordSendAttempt();
-    if (publishStep_(queue_[0].topicKey, queue_[0].value, context_)) {
-      metrics_.recordSendResult(true, 0, nowMs - queue_[0].queuedAtMs);
-      popFront_();
+    for (uint8_t burst = 0; burst < kPublishBurstPerTick && queueCount_ > 0; ++burst) {
+      metrics_.recordSendAttempt();
+      if (publishStep_(queue_[0].topicKey, queue_[0].value, context_)) {
+        metrics_.recordSendResult(true, 0, nowMs - queue_[0].queuedAtMs);
+        popFront_();
+        continue;
+      }
+
+      metrics_.recordSendResult(false, 0, nowMs - queue_[0].queuedAtMs);
+      if (queue_[0].retriesRemaining == 0) {
+        popFront_();
+        return;
+      }
+
+      --queue_[0].retriesRemaining;
+      scheduleBackoff_(nowMs);
       return;
     }
-
-    metrics_.recordSendResult(false, 0, nowMs - queue_[0].queuedAtMs);
-    if (queue_[0].retriesRemaining == 0) {
-      popFront_();
-      return;
-    }
-
-    --queue_[0].retriesRemaining;
-    scheduleBackoff_(nowMs);
   }
 
   bool isConnected() const {

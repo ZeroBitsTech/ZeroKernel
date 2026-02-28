@@ -64,6 +64,7 @@ class ZeroHttpPump {
   };
 
   static const uint8_t kQueueCapacity = ZEROKERNEL_HTTP_PUMP_QUEUE_CAPACITY;
+  static const uint8_t kImmediatePhaseBudget = 4;
 
   ZeroHttpPump()
       : kernel_(NULL),
@@ -164,29 +165,34 @@ class ZeroHttpPump {
     hasTicked_ = true;
     lastTickAtMs_ = nowMs;
 
-    if (!active_) {
-      if (queueCount_ == 0) {
+    for (uint8_t stepBudget = 0; stepBudget < kImmediatePhaseBudget; ++stepBudget) {
+      if (!active_) {
+        if (queueCount_ == 0) {
+          return;
+        }
+
+        startNextRequest_(nowMs);
+      }
+
+      if (phase_ == kPhaseConnecting && nextRetryAtMs_ != 0 && nowMs < nextRetryAtMs_) {
         return;
       }
 
-      startNextRequest_(nowMs);
-    }
+      const StepResult result = stepCurrentPhase_();
+      if (result == kStepPending) {
+        return;
+      }
 
-    if (phase_ == kPhaseConnecting && nextRetryAtMs_ != 0 && nowMs < nextRetryAtMs_) {
-      return;
-    }
+      if (result == kStepFailed) {
+        handlePhaseFailure_(nowMs);
+        return;
+      }
 
-    const StepResult result = stepCurrentPhase_();
-    if (result == kStepPending) {
-      return;
+      handlePhaseSuccess_(nowMs);
+      if (!active_) {
+        return;
+      }
     }
-
-    if (result == kStepFailed) {
-      handlePhaseFailure_(nowMs);
-      return;
-    }
-
-    handlePhaseSuccess_(nowMs);
   }
 
   bool isBusy() const {
