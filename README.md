@@ -107,6 +107,13 @@ Tradeoff summary:
 - The tuned ZeroKernel version keeps the same node online, preserves successful local delivery, and holds sensor timing far closer to the target schedule.
 - This is the kind of workload where the difference is visible on real hardware under real transport load, not only in a synthetic lab loop.
 
+Real sample window from the direct AP seismic project:
+
+```text
+BASELINE_SEISMIC window_ms=5009 sample_runs=476 fast_avg_lag_us=5393 fast_max_lag_us=21733 fast_miss=406 queue_max=1 sent_ok=5 sent_fail=0 captures=5 clients=1
+ZEROKERNEL_SEISMIC window_ms=5000 sample_runs=501 fast_avg_lag_us=6 fast_max_lag_us=2378 fast_miss=1 queue_max=3 sent_ok=7 sent_fail=0 captures=7 clients=1
+```
+
 ## ESP32 Telemetry Parity
 
 The richer ESP32 telemetry workload is also now phase-aligned after the runtime scheduling fix:
