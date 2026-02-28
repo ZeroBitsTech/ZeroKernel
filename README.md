@@ -61,39 +61,40 @@ Tradeoff summary:
 - Determinism maintained: `0 lag`, `0 misses`
 - Measured free heap on Wemos diagnostics: `49280`
 
-## Quick Start
+## Install
 
-```cpp
-#include <ZeroKernel.h>
+### Arduino IDE
 
-void readSensor() {
-  // Non-blocking work only.
-}
+1. Download or clone this repository.
+2. Put the `ZeroKernel` folder into your Arduino libraries directory:
+   - Linux: `~/Arduino/libraries/`
+   - Windows: `Documents/Arduino/libraries/`
+   - macOS: `~/Documents/Arduino/libraries/`
+3. Restart Arduino IDE.
+4. Open an example from `File -> Examples -> ZeroKernel`.
 
-void setup() {
-  ZeroKernel.begin(millis);
-  ZeroKernel.addTask("SensorReader", readSensor, 500, 10);
-}
+### PlatformIO
 
-void loop() {
-  ZeroKernel.tick();
-}
+Add the local library path in `platformio.ini`:
+
+```ini
+[env:your_board]
+platform = espressif8266
+board = d1_mini
+framework = arduino
+lib_deps =
+  symlink:///absolute/path/to/ZeroKernel
 ```
 
-Key-based routing is available when you want the lean path:
-
-```cpp
-const zerokernel::Kernel::TopicKey telemetryKey =
-    zerokernel::Kernel::makeTopicKey("telemetry.temperature");
-
-ZeroKernel.publishDeferredFast(telemetryKey, 42);
-```
+Or vendor the repository inside your project and point `lib_extra_dirs` to it.
 
 ## How To Use
 
-### 1. Add the library
+### 1. Include the header
 
-Put ZeroKernel in your Arduino libraries folder or include it directly in your firmware project.
+```cpp
+#include <ZeroKernel.h>
+```
 
 ### 2. Start the runtime
 
@@ -177,6 +178,25 @@ If diagnostics are enabled:
 ZeroKernel.dumpStats(printLine);
 ZeroKernel.dumpTasks(printLine);
 ZeroKernel.dumpTrace(printLine);
+```
+
+### Minimal full sketch
+
+```cpp
+#include <ZeroKernel.h>
+
+void readSensor() {
+  // Non-blocking work only.
+}
+
+void setup() {
+  ZeroKernel.begin(millis);
+  ZeroKernel.addTask("SensorReader", readSensor, 500, 10);
+}
+
+void loop() {
+  ZeroKernel.tick();
+}
 ```
 
 ## Validation Pipeline
@@ -265,10 +285,3 @@ Key files:
 - [api.md](/home/pinszzii/Projects/ZeroKernel/docs/api.md)
 - [resource-budget.md](/home/pinszzii/Projects/ZeroKernel/docs/resource-budget.md)
 - [testing.md](/home/pinszzii/Projects/ZeroKernel/docs/testing.md)
-
-## Next Priorities
-
-1. Keep pushing lean key-only routing so compatibility wrappers stay thin.
-2. Continue shaving static RAM without sacrificing deterministic timing.
-3. Tighten regression gates so size and performance drift is caught automatically.
-4. Expand target-native watchdog bridges and recovery policy depth where it is worth the complexity.
