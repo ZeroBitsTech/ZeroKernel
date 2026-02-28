@@ -1,0 +1,630 @@
+#include <stdio.h>
+
+#include "ZeroKernel.h"
+
+namespace {
+
+int g_failures = 0;
+int g_directEvents = 0;
+int g_queuedEvents = 0;
+int g_typedEvents = 0;
+int g_taskRuns = 0;
+int g_signalEvents = 0;
+int g_watchdogFeeds = 0;
+int g_dumpLines = 0;
+int g_commandRuns = 0;
+int g_fastEvents = 0;
+int g_workRuns = 0;
+int g_backpressureCount = 0;
+int g_stateChanges = 0;
+unsigned long g_fakeNowMs = 0;
+uint8_t g_lastState = 0;
+unsigned long g_lastCommandValue = 0;
+unsigned long g_lastFastValue = 0;
+long g_backpressureFirst = -1;
+long g_backpressureLast = -1;
+char g_orderLog[8];
+int g_orderIndex = 0;
+
+void expectTrue(bool condition, const char* message) {
+  if (!condition) {
+    ++g_failures;
+    printf("FAIL: %s\n", message);
+  }
+}
+
+void onDirectEvent(const char*, long value) {
+  if (value == 7) {
+    ++g_directEvents;
+  }
+}
+
+void onQueuedEvent(const char*, long value) {
+  if (value == 9) {
+    ++g_queuedEvents;
+  }
+}
+
+void onTypedEvent(const char*, const zerokernel::Kernel::EventValue& value) {
+  if (value.type == zerokernel::Kernel::kEventBool && value.boolValue) {
+    ++g_typedEvents;
+  }
+
+  if (value.type == zerokernel::Kernel::kEventUnsigned && value.unsignedValue == 99UL) {
+    ++g_typedEvents;
+  }
+}
+
+void onCommand(const char*, const zerokernel::Kernel::EventValue& value) {
+  ++g_commandRuns;
+
+  if (value.type == zerokernel::Kernel::kEventUnsigned) {
+    g_lastCommandValue = value.unsignedValue;
+  } else if (value.type == zerokernel::Kernel::kEventLong) {
+    g_lastCommandValue = static_cast<unsigned long>(value.longValue);
+  }
+}
+
+void onFastEvent(const char*, long value) {
+  ++g_fastEvents;
+  g_lastFastValue = static_cast<unsigned long>(value);
+}
+
+void onBackpressureEvent(const char*, long value) {
+  if (g_backpressureFirst < 0) {
+    g_backpressureFirst = value;
+  }
+
+  g_backpressureLast = value;
+  ++g_backpressureCount;
+}
+
+void onWork(const zerokernel::Kernel::EventValue& value) {
+  ++g_workRuns;
+
+  if (value.type == zerokernel::Kernel::kEventUnsigned) {
+    g_lastFastValue = value.unsignedValue;
+  }
+}
+
+unsigned long fakeClock() {
+  return g_fakeNowMs;
+}
+
+void periodicTask() {
+  ++g_taskRuns;
+}
+
+void highPriorityTask() {
+  if (g_orderIndex < 8) {
+    g_orderLog[g_orderIndex++] = 'H';
+  }
+}
+
+void lowPriorityTask() {
+  if (g_orderIndex < 8) {
+    g_orderLog[g_orderIndex++] = 'L';
+  }
+}
+
+void onSignal(const zerokernel::Kernel::KernelSignal& signal) {
+  if (signal.type == zerokernel::Kernel::kSignalDeadlineMiss ||
+      signal.type == zerokernel::Kernel::kSignalEventDrop ||
+      signal.type == zerokernel::Kernel::kSignalCommandDrop ||
+      signal.type == zerokernel::Kernel::kSignalWorkDrop ||
+      signal.type == zerokernel::Kernel::kSignalTaskFailure ||
+      signal.type == zerokernel::Kernel::kSignalHeartbeatTimeout ||
+      signal.type == zerokernel::Kernel::kSignalExecutionOverrun) {
+    ++g_signalEvents;
+  }
+}
+
+void onHardwareWatchdogFeed() {
+  ++g_watchdogFeeds;
+}
+
+void onDumpLine(const char*) {
+  ++g_dumpLines;
+}
+
+void onStateChange(uint8_t state) {
+  ++g_stateChanges;
+  g_lastState = state;
+}
+
+void longRunningTask() {
+  ++g_taskRuns;
+  g_fakeNowMs += 5;
+}
+
+int testDirectPublish() {
+  expectTrue(ZeroKernel.subscribe("direct.topic", onDirectEvent), "subscribe direct");
+  expectTrue(ZeroKernel.publish("direct.topic", 7), "publish direct");
+  expectTrue(g_directEvents == 1, "direct event delivered");
+  expectTrue(ZeroKernel.unsubscribe("direct.topic", onDirectEvent), "unsubscribe direct");
+  expectTrue(ZeroKernel.subscriptionCount() == 0, "no active subscriptions after unsubscribe");
+  return g_failures;
+}
+
+int testDeferredPublish() {
+  expectTrue(ZeroKernel.subscribe("queue.topic", onQueuedEvent), "subscribe queue");
+  expectTrue(ZeroKernel.publishDeferred("queue.topic", 9), "enqueue deferred event");
+  expectTrue(ZeroKernel.publishDeferred("queue.topic", 9), "coalesce duplicate event");
+  expectTrue(ZeroKernel.queuedEventCount() == 1, "queued event coalesced");
+  ZeroKernel.flushEvents();
+  expectTrue(g_queuedEvents == 1, "deferred event delivered");
+  expectTrue(ZeroKernel.queuedEventCount() == 0, "queue empty after flush");
+  expectTrue(ZeroKernel.unsubscribe("queue.topic"), "unsubscribe queue");
+  return g_failures;
+}
+
+int testTypedPublish() {
+  expectTrue(ZeroKernel.subscribeTyped("typed.topic", onTypedEvent), "subscribe typed");
+  expectTrue(ZeroKernel.publishTyped("typed.topic",
+                                     zerokernel::Kernel::EventValue::fromBool(true)),
+             "publish typed bool");
+  expectTrue(ZeroKernel.publishDeferredTyped(
+                 "typed.topic",
+                 zerokernel::Kernel::EventValue::fromUnsigned(99UL)),
+             "publish deferred typed unsigned");
+  expectTrue(ZeroKernel.queuedEventCount() == 1, "typed deferred event queued");
+  ZeroKernel.flushEvents();
+  expectTrue(g_typedEvents == 2, "typed events delivered");
+  expectTrue(ZeroKernel.typedSubscriptionCount() == 1, "typed subscription count");
+  expectTrue(ZeroKernel.unsubscribeTyped("typed.topic", onTypedEvent), "unsubscribe typed");
+  expectTrue(ZeroKernel.typedSubscriptionCount() == 0, "typed subscriptions cleared");
+  return g_failures;
+}
+
+int testFastDispatch() {
+  zerokernel::Kernel isolatedKernel;
+  const zerokernel::Kernel::TopicKey topicKey =
+      zerokernel::Kernel::makeTopicKey("fast.topic");
+
+  g_fastEvents = 0;
+  g_lastFastValue = 0;
+
+  expectTrue(isolatedKernel.subscribe("fast.topic", onFastEvent), "subscribe fast");
+  expectTrue(isolatedKernel.publishFast(topicKey, 17), "publish fast by key");
+  expectTrue(isolatedKernel.publishDeferredFast(topicKey, 19), "publish deferred fast by key");
+  expectTrue(isolatedKernel.queuedEventCount() == 1, "fast deferred event queued");
+  isolatedKernel.flushEvents();
+
+  expectTrue(g_fastEvents == 2, "fast events delivered");
+  expectTrue(g_lastFastValue == 19UL, "fast deferred event delivered last");
+
+  g_fastEvents = 0;
+  expectTrue(isolatedKernel.unsubscribe("fast.topic", onFastEvent), "unsubscribe string fast");
+  expectTrue(isolatedKernel.subscribeFast(topicKey, onFastEvent), "subscribe by key only");
+  expectTrue(isolatedKernel.publish("fast.topic", 23), "string publish reaches key-only sub");
+  expectTrue(g_fastEvents == 1, "key-only subscriber receives string publish");
+  expectTrue(isolatedKernel.unsubscribeFast(topicKey, onFastEvent), "unsubscribe by key");
+  return g_failures;
+}
+
+int testCommandQueue() {
+  zerokernel::Kernel isolatedKernel;
+  g_commandRuns = 0;
+  g_lastCommandValue = 0;
+
+  expectTrue(isolatedKernel.registerCommand("cmd.refresh", onCommand), "register command");
+  expectTrue(isolatedKernel.enqueueCommandTyped(
+                 "cmd.refresh",
+                 zerokernel::Kernel::EventValue::fromUnsigned(41UL)),
+             "enqueue command");
+  expectTrue(isolatedKernel.enqueueCommandTyped(
+                 "cmd.refresh",
+                 zerokernel::Kernel::EventValue::fromUnsigned(41UL)),
+             "coalesce duplicate command");
+  expectTrue(isolatedKernel.enqueueCommand("cmd.refresh", 77), "enqueue distinct command");
+  expectTrue(isolatedKernel.queuedCommandCount() == 2, "command queue coalesces duplicates");
+
+  isolatedKernel.flushCommands();
+
+  expectTrue(g_commandRuns == 2, "command handler executed twice");
+  expectTrue(g_lastCommandValue == 77UL, "latest command payload delivered");
+  expectTrue(isolatedKernel.queuedCommandCount() == 0, "command queue drained");
+  expectTrue(isolatedKernel.commandHandlerCount() == 1, "command handler count tracked");
+  expectTrue(isolatedKernel.unregisterCommand("cmd.refresh", onCommand), "unregister command");
+  expectTrue(isolatedKernel.commandHandlerCount() == 0, "command handler removed");
+
+  const zerokernel::Kernel::KernelStats stats = isolatedKernel.getStats();
+  expectTrue(stats.commandsQueued == 2, "command stats track enqueues");
+  expectTrue(stats.commandsDelivered == 2, "command stats track deliveries");
+  return g_failures;
+}
+
+int testWorkQueue() {
+  zerokernel::Kernel isolatedKernel;
+
+  g_workRuns = 0;
+  g_lastFastValue = 0;
+
+  expectTrue(isolatedKernel.scheduleWorkTyped(
+                 onWork, zerokernel::Kernel::EventValue::fromUnsigned(55UL)),
+             "schedule work");
+  expectTrue(isolatedKernel.scheduleWorkTyped(
+                 onWork, zerokernel::Kernel::EventValue::fromUnsigned(55UL)),
+             "coalesce duplicate work");
+  expectTrue(isolatedKernel.scheduleWork(onWork), "schedule second work");
+  expectTrue(isolatedKernel.queuedWorkCount() == 2, "work queue coalesces duplicates");
+
+  isolatedKernel.flushWork();
+
+  expectTrue(g_workRuns == 2, "work handler executed twice");
+  expectTrue(g_lastFastValue == 55UL, "work payload preserved");
+  expectTrue(isolatedKernel.queuedWorkCount() == 0, "work queue drained");
+
+  const zerokernel::Kernel::KernelStats stats = isolatedKernel.getStats();
+  expectTrue(stats.workQueued == 2, "work stats track enqueues");
+  expectTrue(stats.workDelivered == 2, "work stats track deliveries");
+  return g_failures;
+}
+
+int testEventFlags() {
+  zerokernel::Kernel isolatedKernel;
+
+  isolatedKernel.setFlags(0x03U);
+  expectTrue(isolatedKernel.hasFlags(0x01U), "single flag reported");
+  expectTrue(isolatedKernel.hasFlags(0x03U), "combined flags reported");
+  expectTrue(!isolatedKernel.hasFlags(0x07U), "missing flag reported");
+  expectTrue(isolatedKernel.hasFlags(0x06U, false), "partial flag match reported");
+
+  const zerokernel::Kernel::EventFlags taken = isolatedKernel.takeFlags(0x02U);
+  expectTrue(taken == 0x02U, "takeFlags returns captured bits");
+  expectTrue(!isolatedKernel.hasFlags(0x02U), "takeFlags clears captured bits");
+
+  isolatedKernel.clearFlags(0x01U);
+  expectTrue(!isolatedKernel.hasFlags(0x01U), "clearFlags clears bits");
+  return g_failures;
+}
+
+int testHeartbeatTimeout() {
+  zerokernel::Kernel isolatedKernel;
+  zerokernel::Kernel::WatchdogPolicy policy = {10, 2, true};
+  isolatedKernel.setWatchdogPolicy(policy);
+  expectTrue(isolatedKernel.addTask("Pulse", periodicTask, 100, 0), "add task");
+  expectTrue(isolatedKernel.setTaskHeartbeatTimeout("Pulse", 10), "set per-task heartbeat timeout");
+
+  isolatedKernel.tick(0);
+  isolatedKernel.tick(200);
+
+  zerokernel::Kernel::TaskStats stats;
+  expectTrue(isolatedKernel.getTaskStats("Pulse", stats), "read task stats");
+  expectTrue(stats.failureCount == 1, "heartbeat timeout increments failure count");
+
+  zerokernel::Kernel::KernelStats kernelStats = isolatedKernel.getStats();
+  expectTrue(kernelStats.heartbeatTimeouts == 1, "kernel recorded heartbeat timeout");
+  return g_failures;
+}
+
+int testTaskScheduling() {
+  zerokernel::Kernel isolatedKernel;
+  expectTrue(isolatedKernel.addTask("Runner", periodicTask, 50, 0), "add periodic task");
+
+  isolatedKernel.tick(0);
+  isolatedKernel.tick(50);
+  isolatedKernel.tick(100);
+
+  expectTrue(g_taskRuns >= 2, "task executed on schedule");
+  return g_failures;
+}
+
+int testNextWakeHint() {
+  zerokernel::Kernel isolatedKernel;
+  expectTrue(isolatedKernel.addTask("Wake", periodicTask, 50, 0), "add wake task");
+
+  isolatedKernel.tick(0);
+  expectTrue(isolatedKernel.nextWakeInMs() == 50, "next wake reflects task interval");
+  isolatedKernel.tick(20);
+  expectTrue(isolatedKernel.nextWakeInMs() == 30, "next wake counts down");
+  isolatedKernel.tick(50);
+  expectTrue(isolatedKernel.nextWakeInMs() == 50, "next wake resets after execution");
+  return g_failures;
+}
+
+int testPriorityScheduling() {
+  zerokernel::Kernel isolatedKernel;
+  zerokernel::Kernel::TaskConfig low = {
+      "Low", lowPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityLow, true, {}};
+  zerokernel::Kernel::TaskConfig high = {
+      "High", highPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityCritical, true, {}};
+
+  g_orderIndex = 0;
+  g_orderLog[0] = '\0';
+
+  expectTrue(isolatedKernel.addTask(low), "add low priority task");
+  expectTrue(isolatedKernel.addTask(high), "add high priority task");
+
+  isolatedKernel.tick(0);
+  isolatedKernel.tick(10);
+
+  expectTrue(g_orderIndex >= 2, "both priority tasks executed");
+  expectTrue(g_orderLog[0] == 'H', "high priority task ran first");
+  expectTrue(g_orderLog[1] == 'L', "low priority task ran second");
+
+  zerokernel::Kernel::TaskStats highStats;
+  expectTrue(isolatedKernel.getTaskStats("High", highStats), "read high priority stats");
+  expectTrue(highStats.priority == zerokernel::Kernel::kPriorityCritical,
+             "high task priority recorded");
+  return g_failures;
+}
+
+int testSafeMode() {
+  zerokernel::Kernel isolatedKernel;
+  zerokernel::Kernel::TaskConfig low = {
+      "LowSafe", lowPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityLow, true, {}};
+  zerokernel::Kernel::TaskConfig high = {
+      "HighSafe", highPriorityTask, 10, 0, 0, zerokernel::Kernel::kPriorityCritical, true, {}};
+
+  g_orderIndex = 0;
+  g_orderLog[0] = '\0';
+
+  expectTrue(isolatedKernel.addTask(low), "add low safe-mode task");
+  expectTrue(isolatedKernel.addTask(high), "add high safe-mode task");
+
+  isolatedKernel.tick(0);
+  isolatedKernel.enterSafeMode(zerokernel::Kernel::kPriorityHigh);
+  expectTrue(isolatedKernel.isSafeMode(), "safe mode enabled");
+  isolatedKernel.tick(10);
+
+  expectTrue(g_orderIndex == 1, "safe mode only ran high-priority task");
+  expectTrue(g_orderLog[0] == 'H', "high-priority task kept running in safe mode");
+
+  isolatedKernel.exitSafeMode();
+  expectTrue(!isolatedKernel.isSafeMode(), "safe mode disabled");
+  isolatedKernel.tick(20);
+  expectTrue(g_orderIndex >= 3, "both tasks resumed after safe mode");
+  return g_failures;
+}
+
+int testGovernanceMetadata() {
+  zerokernel::Kernel isolatedKernel;
+
+  expectTrue(isolatedKernel.abiVersion() == 1U, "abi version exposed");
+  expectTrue(isolatedKernel.runtimeVersion()[0] != '\0', "runtime version exposed");
+  expectTrue(isolatedKernel.state() == zerokernel::Kernel::kStateBoot, "boot state default");
+  expectTrue(isolatedKernel.getIdleStrategy() == zerokernel::Kernel::kIdlePlatformHint,
+             "default idle strategy");
+
+  isolatedKernel.setIdleStrategy(zerokernel::Kernel::kIdleYield);
+  expectTrue(isolatedKernel.getIdleStrategy() == zerokernel::Kernel::kIdleYield,
+             "idle strategy updates");
+  return g_failures;
+}
+
+int testStateAndPanicFlow() {
+  zerokernel::Kernel isolatedKernel;
+  zerokernel::Kernel::ExecutionContract contract = {};
+  contract.maxRuntimeUs = 1000;
+  contract.flags = zerokernel::Kernel::kContractCritical;
+  contract.failureBudget = 1;
+  contract.panicMode = zerokernel::Kernel::kPanicRebootCallback;
+  contract.safeModePriorityFloor = zerokernel::Kernel::kPriorityCritical;
+  zerokernel::Kernel::TaskConfig config = {
+      "CriticalTask",
+      longRunningTask,
+      1,
+      0,
+      0,
+      zerokernel::Kernel::kPriorityCritical,
+      true,
+      contract};
+
+  g_fakeNowMs = 0;
+  g_stateChanges = 0;
+  g_lastState = 0;
+  g_taskRuns = 0;
+
+  isolatedKernel.onStateChange(onStateChange);
+  expectTrue(isolatedKernel.addTask(config), "add critical contract task");
+  isolatedKernel.begin(fakeClock);
+  expectTrue(isolatedKernel.state() == zerokernel::Kernel::kStateNormal, "begin enters normal");
+
+  g_fakeNowMs = 1;
+  isolatedKernel.tick();
+  g_fakeNowMs += 1;
+  isolatedKernel.tick();
+
+  expectTrue(g_taskRuns >= 1, "critical task ran");
+  expectTrue(isolatedKernel.state() == zerokernel::Kernel::kStatePanic, "critical overrun triggers panic");
+  expectTrue(!isolatedKernel.isSafeMode(), "panic non-safe-mode policy skips safe mode");
+  expectTrue(g_stateChanges >= 2, "state change callback invoked");
+
+  const zerokernel::Kernel::PanicInfo panicInfo = isolatedKernel.getLastPanic();
+  expectTrue(panicInfo.reason == zerokernel::Kernel::kPanicTaskOverrun,
+             "panic reason tracks overrun");
+  expectTrue(panicInfo.mode == zerokernel::Kernel::kPanicRebootCallback,
+             "panic mode respects execution contract");
+  expectTrue(panicInfo.taskName[0] == 'C', "panic tracks task name");
+
+  zerokernel::Kernel::TaskStats stats;
+  expectTrue(isolatedKernel.getTaskStats("CriticalTask", stats), "read critical task stats");
+  expectTrue(stats.failureBudget == 1, "task stats expose failure budget");
+  return g_failures;
+}
+
+int testTimingReport() {
+  zerokernel::Kernel isolatedKernel;
+  g_fakeNowMs = 0;
+  g_taskRuns = 0;
+
+  expectTrue(isolatedKernel.addTask("Timed", longRunningTask, 1, 0), "add timed task");
+  isolatedKernel.begin(fakeClock);
+  g_fakeNowMs = 1;
+  isolatedKernel.tick();
+  g_fakeNowMs += 1;
+  isolatedKernel.tick();
+
+  const zerokernel::Kernel::TimingReport report = isolatedKernel.getTimingReport();
+  expectTrue(report.totalTicks >= 2, "timing report counts ticks");
+  expectTrue(report.totalTaskRuns >= 1, "timing report counts task runs");
+  expectTrue(report.worstTaskDurationMs >= 5, "timing report tracks task duration");
+  expectTrue(report.worstTickDurationMs >= 5, "timing report tracks tick duration");
+  return g_failures;
+}
+
+int testDeadlineMetrics() {
+  zerokernel::Kernel isolatedKernel;
+  expectTrue(isolatedKernel.addTask("Laggy", periodicTask, 50, 0), "add laggy task");
+
+  isolatedKernel.tick(0);
+  isolatedKernel.tick(80);
+
+  zerokernel::Kernel::TaskStats stats;
+  expectTrue(isolatedKernel.getTaskStats("Laggy", stats), "read laggy stats");
+  expectTrue(stats.lastLagMs == 30, "lag metric reflects delayed execution");
+  expectTrue(stats.deadlineMissCount == 1, "deadline miss count increments");
+
+  zerokernel::Kernel::KernelStats kernelStats = isolatedKernel.getStats();
+  expectTrue(kernelStats.deadlineMisses == 1, "kernel deadline miss count increments");
+  return g_failures;
+}
+
+int testTaskSnapshot() {
+  zerokernel::Kernel isolatedKernel;
+  expectTrue(isolatedKernel.addTask("Alpha", periodicTask, 25, 0), "add alpha task");
+  expectTrue(isolatedKernel.addTask("Beta", periodicTask, 50, 0), "add beta task");
+
+  zerokernel::Kernel::TaskStats snapshots[2];
+  const uint8_t captured = isolatedKernel.snapshotTasks(snapshots, 2);
+
+  expectTrue(captured == 2, "snapshot captured both tasks");
+  expectTrue(snapshots[0].name[0] == 'A', "first snapshot contains alpha");
+  expectTrue(snapshots[1].name[0] == 'B', "second snapshot contains beta");
+  return g_failures;
+}
+
+int testSignalHook() {
+  zerokernel::Kernel isolatedKernel;
+  zerokernel::Kernel::WatchdogPolicy policy = {5, 2, true};
+  isolatedKernel.setWatchdogPolicy(policy);
+  isolatedKernel.setSignalHandler(onSignal);
+  expectTrue(isolatedKernel.addTask("SignalTask", periodicTask, 10, 0), "add signal task");
+
+  isolatedKernel.tick(0);
+  isolatedKernel.tick(30);
+
+  for (int i = 0; i < 17; ++i) {
+    isolatedKernel.publishDeferred("drop.topic", i);
+  }
+
+  expectTrue(g_signalEvents >= 2, "signal hook captured runtime signals");
+
+  zerokernel::Kernel::TraceEntry traceEntries[4];
+  const uint8_t traceCaptured = isolatedKernel.snapshotTrace(traceEntries, 4);
+  expectTrue(traceCaptured > 0, "trace buffer captured runtime events");
+  expectTrue(isolatedKernel.traceCount() > 0, "trace count reports stored entries");
+  isolatedKernel.clearTrace();
+  expectTrue(isolatedKernel.traceCount() == 0, "trace buffer clears");
+  return g_failures;
+}
+
+int testQueueBackpressure() {
+  zerokernel::Kernel isolatedKernel;
+
+  g_backpressureCount = 0;
+  g_backpressureFirst = -1;
+  g_backpressureLast = -1;
+
+  expectTrue(isolatedKernel.subscribe("bp.topic", onBackpressureEvent), "subscribe backpressure");
+
+  for (int value = 1; value <= 17; ++value) {
+    expectTrue(isolatedKernel.publishDeferred("bp.topic", value), "enqueue with backpressure");
+  }
+
+  expectTrue(isolatedKernel.queuedEventCount() == zerokernel::Kernel::kMaxEventQueue,
+             "queue remains bounded");
+  isolatedKernel.flushEvents();
+
+  expectTrue(g_backpressureCount == zerokernel::Kernel::kMaxEventQueue,
+             "bounded queue delivered expected number of events");
+  expectTrue(g_backpressureFirst == 2, "oldest event was dropped first");
+  expectTrue(g_backpressureLast == 17, "latest event kept");
+  return g_failures;
+}
+
+int testHardwareWatchdogBridge() {
+  zerokernel::Kernel isolatedKernel;
+  zerokernel::Kernel::HardwareWatchdogBridge bridge = {
+      onHardwareWatchdogFeed, true, true};
+  isolatedKernel.setHardwareWatchdogBridge(bridge);
+  expectTrue(isolatedKernel.addTask("BridgeTask", periodicTask, 10, 0), "add bridge task");
+
+  g_watchdogFeeds = 0;
+  isolatedKernel.tick(0);
+  isolatedKernel.tick(10);
+
+  expectTrue(g_watchdogFeeds >= 3, "hardware watchdog feed invoked on tick and task");
+  return g_failures;
+}
+
+int testDebugDump() {
+  zerokernel::Kernel isolatedKernel;
+  expectTrue(isolatedKernel.addTask("DumpTask", periodicTask, 10, 0), "add dump task");
+  isolatedKernel.tick(0);
+  isolatedKernel.tick(10);
+
+  g_dumpLines = 0;
+  isolatedKernel.dumpStats(onDumpLine);
+  isolatedKernel.dumpTasks(onDumpLine);
+  isolatedKernel.dumpTrace(onDumpLine);
+
+  expectTrue(g_dumpLines >= 2, "debug dumps produced output");
+  return g_failures;
+}
+
+}  // namespace
+
+int main() {
+  g_failures = 0;
+  g_directEvents = 0;
+  g_queuedEvents = 0;
+  g_typedEvents = 0;
+  g_taskRuns = 0;
+  g_signalEvents = 0;
+  g_watchdogFeeds = 0;
+  g_dumpLines = 0;
+  g_commandRuns = 0;
+  g_fastEvents = 0;
+  g_workRuns = 0;
+  g_backpressureCount = 0;
+  g_stateChanges = 0;
+  g_fakeNowMs = 0;
+  g_lastState = 0;
+  g_lastCommandValue = 0;
+  g_lastFastValue = 0;
+  g_backpressureFirst = -1;
+  g_backpressureLast = -1;
+  g_orderIndex = 0;
+
+  testDirectPublish();
+  testDeferredPublish();
+  testTypedPublish();
+  testFastDispatch();
+  testCommandQueue();
+  testWorkQueue();
+  testEventFlags();
+  testHeartbeatTimeout();
+  testTaskScheduling();
+  testNextWakeHint();
+  testPriorityScheduling();
+  testSafeMode();
+  testGovernanceMetadata();
+  testStateAndPanicFlow();
+  testDeadlineMetrics();
+  testTimingReport();
+  testTaskSnapshot();
+  testSignalHook();
+  testQueueBackpressure();
+  testHardwareWatchdogBridge();
+  testDebugDump();
+
+  if (g_failures == 0) {
+    printf("All ZeroKernel desktop tests passed.\n");
+    return 0;
+  }
+
+  printf("%d ZeroKernel desktop tests failed.\n", g_failures);
+  return 1;
+}

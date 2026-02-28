@@ -1,0 +1,10 @@
+*.o
+*.pyc
+*.log
+*.tmp
+*.swp
+.DS_Store
+/dist/
+/build/
+/tmp/
+/bin/

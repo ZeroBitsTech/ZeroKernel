@@ -1,0 +1,38 @@
+{
+  "kernel": "ZeroKernel",
+  "vendor": "ZeroBits",
+  "tagline": "Small Bits. Solid Systems.",
+  "runtime_version": "1.2.0",
+  "abi_version": 1,
+  "model": "Embedded Execution Runtime",
+  "execution": {
+    "scheduler": "cooperative",
+    "blocking_allowed": false,
+    "heap_usage_runtime": 0,
+    "fixed_memory_footprint": true
+  },
+  "capacity": {
+    "tasks": 8,
+    "subscribers": 16,
+    "typed_subscribers": 16,
+    "event_queue": 16,
+    "command_handlers": 8,
+    "command_queue": 16,
+    "work_queue": 8,
+    "trace_entries": 16
+  },
+  "supervision": {
+    "watchdog": true,
+    "safe_mode": true,
+    "kernel_state_model": true,
+    "panic_handler": true,
+    "execution_contract": true
+  },
+  "portability": {
+    "arduino": true,
+    "esp8266": true,
+    "esp32": true,
+    "rp2040": true,
+    "stm32": true
+  }
+}
