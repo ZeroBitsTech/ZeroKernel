@@ -34,6 +34,7 @@ trap restore_safe EXIT
 
 "${ARDUINO_CLI}" compile --fqbn "${FQBN}" --board-options UploadSpeed=115200 \
   --library "${ROOT_DIR}" \
+  --build-property "build.extra_flags=-DZEROKERNEL_PROFILE_LEAN_NET" \
   --upload -p "${PORT}" \
   "${ROOT_DIR}/examples/RealProjectNode" \
   2>&1 | tee "${BUILD_LOG}"

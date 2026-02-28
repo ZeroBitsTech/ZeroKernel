@@ -27,6 +27,7 @@ compile_and_upload() {
   local build_log="$2"
   shift 2 || true
   "${ARDUINO_CLI}" compile --fqbn "${FQBN}" --board-options UploadSpeed=115200 "$@" \
+    --build-property "build.extra_flags=-DZEROKERNEL_PROFILE_LEAN_NET" \
     --upload -p "${PORT}" "${sketch_path}" 2>&1 | tee "${build_log}"
 }
 

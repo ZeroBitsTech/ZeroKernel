@@ -107,6 +107,16 @@ The optional network helpers are currently marked **BETA**:
 
 They are already useful and validated on desktop plus ESP32 hardware, but they are still under active tuning for footprint, retry behavior, and cross-board transport quirks. The core runtime is the stable layer; the network helpers should be treated as add-on modules that are ready for evaluation and controlled deployments.
 
+Current best module tradeoff reference (ESP32, `LEAN_NET`, manual pattern vs module pattern):
+
+- RAM overhead: `+408 bytes`
+- Determinism maintained: `fast_miss=0`
+- HTTP success count: `6 -> 9`
+- MQTT success count: `10 -> 18`
+- Queue pressure: `4 -> 1`
+
+In other words: the modules do cost memory, but the current tuned path keeps that cost bounded and pays it back with better transport throughput and less queue buildup under the same synthetic workload window.
+
 ## Field Validation: ESP8266 Seismic Node
 
 Measured on a real `ESP8266` direct-AP seismic node using:
@@ -381,6 +391,8 @@ Recommended realistic network workload:
 
 - `examples/RealProjectNode`:
   a portable node-style workload that simulates sensor sampling, WiFi link maintenance, HTTP delivery, MQTT delivery, queue pressure, and realistic intermittent transport failures.
+  Latest ESP32 hardware reference:
+  `REAL_PROJECT_NODE window_ms=10010 sample_runs=100 fast_avg_lag_us=0 fast_max_lag_us=0 fast_miss=0 link_up=1 wifi_attempts=2 reconnects=1 http_ok=33 http_fail=5 http_rate=86 mqtt_ok=32 mqtt_fail=4 mqtt_rate=88 http_queue=0 mqtt_queue=1`
 
 - `examples/ESP32TelemetryNode`:
   a richer ESP32 node example with WiFi maintenance, capability-gated diagnostics, heartbeat events, and periodic runtime summaries.
@@ -430,6 +442,7 @@ Key profiles:
 - `ZEROKERNEL_PROFILE_TINY`
 - `ZEROKERNEL_PROFILE_MINIMAL_RUNTIME`
 - `ZEROKERNEL_PROFILE_POWER_SAVE`
+- `ZEROKERNEL_PROFILE_LEAN_NET`
 - `ZEROKERNEL_PROFILE_NETWORK_NODE`
 - `ZEROKERNEL_PROFILE_EXTENDED`
 - `ZEROKERNEL_PROFILE_DIAGNOSTIC`
@@ -445,6 +458,7 @@ Important lean-build switches:
 `ZEROKERNEL_ENABLE_CAPABILITIES` stays enabled in full profiles and is compiled out in `POWER_SAVE` and `MINIMAL_RUNTIME`, so lean targets do not pay extra static RAM for capability state.
 
 `ZEROKERNEL_PROFILE_NETWORK_NODE` biases the runtime toward WiFi/BLE/MQTT-style firmware: key-first routing, bounded command/work queues, stronger drain budgets, and leaner metadata by default.
+`ZEROKERNEL_PROFILE_LEAN_NET` pushes harder on that same direction for module-heavy nodes: smaller queue defaults, stripped diagnostics, topic-key routing, and tighter runtime state for optional network helpers.
 - `ZEROKERNEL_ENABLE_DEBUG_DUMP`
 
 For small builds, the goal is to preserve the public API while collapsing runtime cost toward key-based routing and stripped diagnostics.

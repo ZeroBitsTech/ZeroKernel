@@ -8,6 +8,8 @@
 - Added fairer ESP32 module compare tooling and improved serial capture.
 - Reduced optional network module footprint via lean transport metrics and smaller default queues.
 - Improved `ZeroHttpPump` and `ZeroMqttPump` throughput by allowing bounded intra-tick progress.
+- Added `ZEROKERNEL_PROFILE_LEAN_NET` for tighter network-oriented builds.
+- Reduced network module state again by compacting transport metrics counters.
 
 ## 1.3.x
 

@@ -1,6 +1,8 @@
 #ifndef ZEROKERNEL_MODULES_NET_ZEROTRANSPORTMETRICS_H
 #define ZEROKERNEL_MODULES_NET_ZEROTRANSPORTMETRICS_H
 
+#include <stdint.h>
+
 namespace zerokernel {
 namespace modules {
 namespace net {
@@ -57,7 +59,7 @@ class ZeroTransportMetrics {
   }
 
   void recordConnectAttempt() {
-    ++connectAttempts_;
+    increment16_(connectAttempts_);
   }
 
   void recordConnectResult(bool success, unsigned long latencyMs) {
@@ -69,23 +71,21 @@ class ZeroTransportMetrics {
 #endif
 
     if (success) {
-      ++connectSuccesses_;
+      increment16_(connectSuccesses_);
       consecutiveFailures_ = 0;
       return;
     }
 
-    ++connectFailures_;
-    ++consecutiveFailures_;
+    increment16_(connectFailures_);
+    increment16_(consecutiveFailures_);
   }
 
   void recordSendQueued(unsigned long queueDepth) {
-    if (queueDepth > maxQueueDepth_) {
-      maxQueueDepth_ = queueDepth;
-    }
+    assignQueueDepth_(maxQueueDepth_, queueDepth);
   }
 
   void recordSendAttempt() {
-    ++sendAttempts_;
+    increment16_(sendAttempts_);
   }
 
   void recordSendResult(bool success,
@@ -105,25 +105,25 @@ class ZeroTransportMetrics {
 #endif
 
     if (success) {
-      ++sendSuccesses_;
+      increment16_(sendSuccesses_);
       consecutiveFailures_ = 0;
       return;
     }
 
-    ++sendFailures_;
-    ++consecutiveFailures_;
+    increment16_(sendFailures_);
+    increment16_(consecutiveFailures_);
   }
 
   void recordLoopCall() {
-    ++loopCalls_;
+    increment16_(loopCalls_);
   }
 
   void recordQueueDrop() {
-    ++queueDrops_;
+    increment16_(queueDrops_);
   }
 
   void recordBackoffSchedule() {
-    ++backoffSchedules_;
+    increment16_(backoffSchedules_);
   }
 
   Snapshot snapshot() const {
@@ -160,17 +160,30 @@ class ZeroTransportMetrics {
   }
 
  private:
-  unsigned long connectAttempts_;
-  unsigned long connectSuccesses_;
-  unsigned long connectFailures_;
-  unsigned long sendAttempts_;
-  unsigned long sendSuccesses_;
-  unsigned long sendFailures_;
-  unsigned long loopCalls_;
-  unsigned long queueDrops_;
-  unsigned long backoffSchedules_;
-  unsigned long consecutiveFailures_;
-  unsigned long maxQueueDepth_;
+  static void increment16_(uint16_t& value) {
+    if (value != 0xFFFFu) {
+      ++value;
+    }
+  }
+
+  static void assignQueueDepth_(uint8_t& target, unsigned long depth) {
+    const uint8_t normalized = depth > 0xFFu ? 0xFFu : static_cast<uint8_t>(depth);
+    if (normalized > target) {
+      target = normalized;
+    }
+  }
+
+  uint16_t connectAttempts_;
+  uint16_t connectSuccesses_;
+  uint16_t connectFailures_;
+  uint16_t sendAttempts_;
+  uint16_t sendSuccesses_;
+  uint16_t sendFailures_;
+  uint16_t loopCalls_;
+  uint16_t queueDrops_;
+  uint16_t backoffSchedules_;
+  uint16_t consecutiveFailures_;
+  uint8_t maxQueueDepth_;
 
 #if ZEROKERNEL_ENABLE_NET_EXTENDED_METRICS
   unsigned long lastConnectLatencyMs_;
