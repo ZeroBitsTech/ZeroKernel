@@ -106,7 +106,8 @@ class Kernel {
   enum ContractFlag : uint8_t {
     kContractCritical = 1 << 0,
     kContractDropIfLate = 1 << 1,
-    kContractAllowDegrade = 1 << 2
+    kContractAllowDegrade = 1 << 2,
+    kContractRunImmediate = 1 << 3
   };
 
   struct EventValue {

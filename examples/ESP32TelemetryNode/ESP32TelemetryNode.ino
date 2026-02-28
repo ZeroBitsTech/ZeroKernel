@@ -272,7 +272,12 @@ void setup() {
       0,
       zerokernel::Kernel::kPriorityHigh,
       true,
-      {},
+      {0,
+       static_cast<uint8_t>(zerokernel::Kernel::kContractRunImmediate |
+                            zerokernel::Kernel::kContractDropIfLate),
+       0,
+       0,
+       0},
       zerokernel::Kernel::kCapIO};
   zerokernel::Kernel::TaskConfig sampleTask = {
       "SensorSampler",
@@ -282,7 +287,12 @@ void setup() {
       0,
       zerokernel::Kernel::kPriorityNormal,
       true,
-      {},
+      {0,
+       static_cast<uint8_t>(zerokernel::Kernel::kContractRunImmediate |
+                            zerokernel::Kernel::kContractDropIfLate),
+       0,
+       0,
+       0},
       zerokernel::Kernel::kCapIO};
   zerokernel::Kernel::TaskConfig telemetryTask = {
       "TelemetryFlush",
@@ -292,7 +302,12 @@ void setup() {
       0,
       zerokernel::Kernel::kPriorityHigh,
       true,
-      {},
+      {0,
+       static_cast<uint8_t>(zerokernel::Kernel::kContractRunImmediate |
+                            zerokernel::Kernel::kContractDropIfLate),
+       0,
+       0,
+       0},
       zerokernel::Kernel::kCapTelemetry};
   zerokernel::Kernel::TaskConfig heartbeatTask = {
       "Heartbeat",
@@ -302,7 +317,12 @@ void setup() {
       0,
       zerokernel::Kernel::kPriorityHigh,
       true,
-      {},
+      {0,
+       static_cast<uint8_t>(zerokernel::Kernel::kContractRunImmediate |
+                            zerokernel::Kernel::kContractDropIfLate),
+       0,
+       0,
+       0},
       zerokernel::Kernel::kCapIO};
   zerokernel::Kernel::TaskConfig modeTask = {
       "DiagMode",

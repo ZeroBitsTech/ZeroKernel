@@ -147,7 +147,10 @@ void Kernel::resetKernelStats_() {
 }
 
 void Kernel::resetRuntimeState_(TaskSlot& slot, TimeMs nowMs) {
-  slot.lastRunAtMs = nowMs;
+  slot.lastRunAtMs =
+      (slot.contractFlags & kContractRunImmediate) != 0U && slot.intervalMs <= nowMs
+          ? (nowMs - slot.intervalMs)
+          : nowMs;
   slot.lastDurationMs = 0;
   slot.lastHeartbeatAtMs = nowMs;
 #if ZEROKERNEL_ENABLE_EXTENDED_TASK_METRICS
@@ -192,7 +195,18 @@ void Kernel::recordExecutionSuccess_(TaskSlot& slot,
                                      TimeMs afterRun) {
   const TimeMs dueAtMs = slot.lastRunAtMs + slot.intervalMs;
   const TimeMs lagMs = beforeRun > dueAtMs ? (beforeRun - dueAtMs) : 0;
-  const TimeMs nextRunAnchorMs = afterRun > beforeRun ? afterRun : beforeRun;
+  TimeMs nextRunAnchorMs = afterRun > beforeRun ? afterRun : beforeRun;
+
+  if ((slot.contractFlags & kContractDropIfLate) != 0U && slot.intervalMs > 0) {
+    nextRunAnchorMs = dueAtMs;
+
+    if (afterRun > dueAtMs) {
+      const TimeMs elapsedSinceDueMs = afterRun - dueAtMs;
+      const TimeMs skippedIntervals = elapsedSinceDueMs / slot.intervalMs;
+      nextRunAnchorMs =
+          dueAtMs + static_cast<TimeMs>(skippedIntervals * slot.intervalMs);
+    }
+  }
 
   slot.lastRunAtMs = nextRunAnchorMs;
   slot.lastDurationMs = afterRun - beforeRun;

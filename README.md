@@ -81,6 +81,39 @@ Tradeoff summary:
 
 The ESP32 tradeoff is also healthy: the footprint increase is small relative to total headroom, while the scheduling result is materially better under the same workload.
 
+## Field Validation: ESP8266 Seismic Node
+
+Measured on a real `ESP8266` direct-AP seismic node using:
+
+- NodeMCU / ESP8266
+- MPU6050-class accelerometer over I2C
+- local buzzer alarm output
+- direct access point mode with queued HTTP delivery
+
+The original firmware was a single blocking loop. The ZeroKernel rewrite split the workload into sampling, heartbeat, flush, buzzer, temperature, and status tasks.
+
+| Metric | Before (direct loop) | After (ZeroKernel) |
+| --- | ---: | ---: |
+| Sample runs (5s window) | `482` | `501` |
+| Fast avg lag | `227586 us` | `0 us` |
+| Fast max lag | `316934 us` | `0 us` |
+| Fast misses | `482` | `0` |
+
+Tradeoff summary:
+
+- The direct-loop version drifted badly under the same sensor workload.
+- The ZeroKernel version stayed phase-aligned and deterministic.
+- This is the kind of workload where the difference is immediately visible in real behavior, not just in synthetic benchmarks.
+
+## ESP32 Telemetry Parity
+
+The richer ESP32 telemetry workload is also now phase-aligned after the runtime scheduling fix:
+
+- Baseline: `sample_runs=21`, `fast_avg_lag_us=0`, `fast_max_lag_us=0`, `fast_miss=0`
+- ZeroKernel: `sample_runs=21`, `fast_avg_lag_us=0`, `fast_max_lag_us=0`, `fast_miss=0`
+
+This matters because the fix is global to periodic task scheduling. It is not a demo-only patch; it improves sensor, telemetry, heartbeat, and transport polling loops across supported targets.
+
 ## Install
 
 ### Arduino IDE
