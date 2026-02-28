@@ -9,8 +9,11 @@ ZeroKernel also supports preset profiles that change the default capacities and 
 - `ZEROKERNEL_PROFILE_TINY`
 - `ZEROKERNEL_PROFILE_MINIMAL_RUNTIME`
 - `ZEROKERNEL_PROFILE_POWER_SAVE`
+- `ZEROKERNEL_PROFILE_NETWORK_NODE`
 - `ZEROKERNEL_PROFILE_EXTENDED`
 - `ZEROKERNEL_PROFILE_DIAGNOSTIC`
+
+`ZEROKERNEL_PROFILE_NETWORK_NODE` is intended for transport-heavy firmware. It keeps typed events, command/work queues, and adaptive drain enabled while stripping legacy labels and most diagnostics overhead.
 
 Explicit capacity or feature macros still win over a profile if both are defined.
 

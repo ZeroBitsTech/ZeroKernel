@@ -548,6 +548,9 @@ class Kernel {
   CapabilityMask capabilityMask_;
   CapabilityMask safeModeCapabilityMask_;
 #endif
+  uint8_t registeredTaskCount_;
+  uint8_t readyTaskCount_;
+  bool heartbeatMonitoringActive_;
   uint8_t kernelState_;
   bool safeMode_;
   uint8_t safeModePriorityFloor_;
@@ -599,6 +602,8 @@ class Kernel {
   int selectNextRunnableTask_(TimeMs nowMs) const;
   void emitSignal_(uint8_t type, const char* label, unsigned long value);
   bool hasTaskCapabilities_(const TaskSlot& slot) const;
+  void syncTaskRuntimeHints_();
+  void drainDeferredQueues_();
 
   int findTaskIndex_(const char* name) const;
   int findFreeTaskIndex_() const;

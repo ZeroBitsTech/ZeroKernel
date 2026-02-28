@@ -108,6 +108,8 @@ void Kernel::setWatchdogPolicy(const WatchdogPolicy& policy) {
   if (watchdogPolicy_.maxConsecutiveFailures == 0) {
     watchdogPolicy_.maxConsecutiveFailures = 1;
   }
+
+  syncTaskRuntimeHints_();
 }
 
 Kernel::WatchdogPolicy Kernel::getWatchdogPolicy() const {
@@ -263,6 +265,8 @@ void Kernel::recordFailure_(TaskSlot& slot, bool heartbeatTimeout) {
     ++kernelStats_.heartbeatTimeouts;
     emitSignal_(kSignalHeartbeatTimeout, slot.name, slot.failureCount);
   }
+
+  syncTaskRuntimeHints_();
 }
 
 void Kernel::recoverIfAllowed_(TaskSlot& slot, TimeMs nowMs) {
@@ -282,6 +286,7 @@ void Kernel::recoverIfAllowed_(TaskSlot& slot, TimeMs nowMs) {
   slot.lastDurationMs = 0;
   slot.state = kTaskReady;
   ++kernelStats_.taskRecoveries;
+  syncTaskRuntimeHints_();
 
   if (kernelState_ != kStatePanic) {
     setKernelState_(kStateRecovery);

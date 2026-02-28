@@ -287,6 +287,7 @@ Key profiles:
 - `ZEROKERNEL_PROFILE_TINY`
 - `ZEROKERNEL_PROFILE_MINIMAL_RUNTIME`
 - `ZEROKERNEL_PROFILE_POWER_SAVE`
+- `ZEROKERNEL_PROFILE_NETWORK_NODE`
 - `ZEROKERNEL_PROFILE_EXTENDED`
 - `ZEROKERNEL_PROFILE_DIAGNOSTIC`
 
@@ -299,6 +300,8 @@ Important lean-build switches:
 - `ZEROKERNEL_ENABLE_CAPABILITIES`
 
 `ZEROKERNEL_ENABLE_CAPABILITIES` stays enabled in full profiles and is compiled out in `POWER_SAVE` and `MINIMAL_RUNTIME`, so lean targets do not pay extra static RAM for capability state.
+
+`ZEROKERNEL_PROFILE_NETWORK_NODE` biases the runtime toward WiFi/BLE/MQTT-style firmware: key-first routing, bounded command/work queues, stronger drain budgets, and leaner metadata by default.
 - `ZEROKERNEL_ENABLE_DEBUG_DUMP`
 
 For small builds, the goal is to preserve the public API while collapsing runtime cost toward key-based routing and stripped diagnostics.

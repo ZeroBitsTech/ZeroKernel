@@ -29,6 +29,9 @@ Kernel::Kernel()
       capabilityMask_(kCapAll),
       safeModeCapabilityMask_(kCapAll),
 #endif
+      registeredTaskCount_(0),
+      readyTaskCount_(0),
+      heartbeatMonitoringActive_(false),
       kernelState_(kStateBoot),
       safeMode_(false),
       safeModePriorityFloor_(kPriorityHigh),
@@ -91,8 +94,9 @@ void Kernel::begin(ClockSource clockSource) {
   safeModePriorityFloor_ = kPriorityHigh;
   idleStrategy_ = kIdlePlatformHint;
   setKernelState_(kStateNormal);
-  kernelStats_.registeredTasks = taskCount();
-  kernelStats_.activeTasks = activeTaskCount();
+  syncTaskRuntimeHints_();
+  kernelStats_.registeredTasks = registeredTaskCount_;
+  kernelStats_.activeTasks = readyTaskCount_;
 
   for (uint8_t i = 0; i < kMaxTasks; ++i) {
     if (!tasks_[i].inUse) {
@@ -149,7 +153,11 @@ void Kernel::tick(TimeMs nowMs) {
   lastTickAtMs_ = nowMs;
   ++kernelStats_.schedulerLoops;
   serviceHardwareWatchdog_(false);
-  inspectHeartbeats_(nowMs);
+  if (heartbeatMonitoringActive_) {
+    inspectHeartbeats_(nowMs);
+  }
+
+  const bool hasCycleCounter = internal::hasCycleCounter();
 
   TimeMs schedulerNowMs = nowMs;
   bool executedTask = false;
@@ -162,8 +170,7 @@ void Kernel::tick(TimeMs nowMs) {
 
     TaskSlot& slot = tasks_[taskIndex];
     const TimeMs beforeRun = schedulerNowMs;
-    const uint32_t taskBeginCycles =
-        internal::hasCycleCounter() ? internal::readCycleCounter() : 0U;
+    const uint32_t taskBeginCycles = hasCycleCounter ? internal::readCycleCounter() : 0U;
     slot.callback();
 
     TimeMs afterRun = beforeRun;
@@ -211,24 +218,15 @@ void Kernel::tick(TimeMs nowMs) {
       recoverIfAllowed_(slot, afterRun);
     }
 
-    drainEventQueue_(resolveDrainLimit_(
-        eventQueueCount_,
-        static_cast<uint8_t>(ZEROKERNEL_EVENT_DRAIN_PER_TICK),
-        static_cast<uint8_t>(kMaxEventQueue)));
-    drainCommandQueue_(resolveDrainLimit_(
-        commandQueueCount_,
-        static_cast<uint8_t>(ZEROKERNEL_COMMAND_DRAIN_PER_TICK),
-        static_cast<uint8_t>(kMaxCommandQueue)));
-    drainWorkQueue_(resolveDrainLimit_(
-        workQueueCount_,
-        static_cast<uint8_t>(ZEROKERNEL_WORK_DRAIN_PER_TICK),
-        static_cast<uint8_t>(kMaxWorkQueue)));
+    drainDeferredQueues_();
     serviceHardwareWatchdog_(true);
     executedTask = true;
 
     if (clockSource_ != NULL) {
       schedulerNowMs = afterRun;
-      inspectHeartbeats_(schedulerNowMs);
+      if (heartbeatMonitoringActive_) {
+        inspectHeartbeats_(schedulerNowMs);
+      }
     }
   }
 
@@ -236,22 +234,11 @@ void Kernel::tick(TimeMs nowMs) {
     ++kernelStats_.schedulerIdleLoops;
   }
 
-  drainEventQueue_(resolveDrainLimit_(
-      eventQueueCount_,
-      static_cast<uint8_t>(ZEROKERNEL_EVENT_DRAIN_PER_TICK),
-      static_cast<uint8_t>(kMaxEventQueue)));
-  drainCommandQueue_(resolveDrainLimit_(
-      commandQueueCount_,
-      static_cast<uint8_t>(ZEROKERNEL_COMMAND_DRAIN_PER_TICK),
-      static_cast<uint8_t>(kMaxCommandQueue)));
-  drainWorkQueue_(resolveDrainLimit_(
-      workQueueCount_,
-      static_cast<uint8_t>(ZEROKERNEL_WORK_DRAIN_PER_TICK),
-      static_cast<uint8_t>(kMaxWorkQueue)));
+  drainDeferredQueues_();
   lastTickAtMs_ = schedulerNowMs;
   kernelStats_.uptimeMs = lastTickAtMs_ - bootAtMs_;
-  kernelStats_.registeredTasks = taskCount();
-  kernelStats_.activeTasks = activeTaskCount();
+  kernelStats_.registeredTasks = registeredTaskCount_;
+  kernelStats_.activeTasks = readyTaskCount_;
 
   TimeMs tickEndMs = schedulerNowMs;
   if (clockSource_ != NULL) {
@@ -278,8 +265,8 @@ Kernel::KernelStats Kernel::getStats() const {
   KernelStats stats = kernelStats_;
   const TimeMs nowMs = clockSource_ != NULL ? currentTime_() : lastTickAtMs_;
   stats.uptimeMs = started_ ? (nowMs - bootAtMs_) : 0;
-  stats.registeredTasks = taskCount();
-  stats.activeTasks = activeTaskCount();
+  stats.registeredTasks = registeredTaskCount_;
+  stats.activeTasks = readyTaskCount_;
   return stats;
 }
 
@@ -318,6 +305,51 @@ void Kernel::inspectHeartbeats_(TimeMs nowMs) {
     }
 
     detectHeartbeatTimeout_(slot, nowMs);
+  }
+}
+
+void Kernel::drainDeferredQueues_() {
+  if (eventQueueCount_ > 0) {
+    drainEventQueue_(resolveDrainLimit_(
+        eventQueueCount_,
+        static_cast<uint8_t>(ZEROKERNEL_EVENT_DRAIN_PER_TICK),
+        static_cast<uint8_t>(kMaxEventQueue)));
+  }
+
+  if (commandQueueCount_ > 0) {
+    drainCommandQueue_(resolveDrainLimit_(
+        commandQueueCount_,
+        static_cast<uint8_t>(ZEROKERNEL_COMMAND_DRAIN_PER_TICK),
+        static_cast<uint8_t>(kMaxCommandQueue)));
+  }
+
+  if (workQueueCount_ > 0) {
+    drainWorkQueue_(resolveDrainLimit_(
+        workQueueCount_,
+        static_cast<uint8_t>(ZEROKERNEL_WORK_DRAIN_PER_TICK),
+        static_cast<uint8_t>(kMaxWorkQueue)));
+  }
+}
+
+void Kernel::syncTaskRuntimeHints_() {
+  registeredTaskCount_ = 0;
+  readyTaskCount_ = 0;
+  heartbeatMonitoringActive_ = watchdogPolicy_.heartbeatTimeoutMs > 0;
+
+  for (uint8_t i = 0; i < kMaxTasks; ++i) {
+    const TaskSlot& slot = tasks_[i];
+    if (!slot.inUse) {
+      continue;
+    }
+
+    ++registeredTaskCount_;
+    if (slot.state == kTaskReady) {
+      ++readyTaskCount_;
+    }
+
+    if (slot.heartbeatTimeoutMs > 0) {
+      heartbeatMonitoringActive_ = true;
+    }
   }
 }
 

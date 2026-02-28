@@ -36,8 +36,9 @@ bool Kernel::addTask(const TaskConfig& config) {
   }
 
   initializeTaskSlot_(tasks_[freeIndex], config, started_ ? currentTime_() : 0);
-  kernelStats_.registeredTasks = taskCount();
-  kernelStats_.activeTasks = activeTaskCount();
+  syncTaskRuntimeHints_();
+  kernelStats_.registeredTasks = registeredTaskCount_;
+  kernelStats_.activeTasks = readyTaskCount_;
   return true;
 }
 
@@ -48,7 +49,8 @@ bool Kernel::suspendTask(const char* name) {
   }
 
   tasks_[index].state = kTaskSuspended;
-  kernelStats_.activeTasks = activeTaskCount();
+  syncTaskRuntimeHints_();
+  kernelStats_.activeTasks = readyTaskCount_;
   return true;
 }
 
@@ -61,7 +63,8 @@ bool Kernel::resumeTask(const char* name) {
   TaskSlot& slot = tasks_[index];
   resetRuntimeState_(slot, currentTime_());
   slot.state = kTaskReady;
-  kernelStats_.activeTasks = activeTaskCount();
+  syncTaskRuntimeHints_();
+  kernelStats_.activeTasks = readyTaskCount_;
   return true;
 }
 
@@ -74,7 +77,8 @@ bool Kernel::restartTask(const char* name) {
   TaskSlot& slot = tasks_[index];
   resetRuntimeState_(slot, currentTime_());
   slot.state = kTaskReady;
-  kernelStats_.activeTasks = activeTaskCount();
+  syncTaskRuntimeHints_();
+  kernelStats_.activeTasks = readyTaskCount_;
   return true;
 }
 
@@ -95,6 +99,7 @@ bool Kernel::setTaskHeartbeatTimeout(const char* name, TimeMs heartbeatTimeoutMs
   }
 
   tasks_[index].heartbeatTimeoutMs = heartbeatTimeoutMs;
+  syncTaskRuntimeHints_();
   return true;
 }
 
@@ -298,27 +303,11 @@ void Kernel::clearTrace() {
 }
 
 uint8_t Kernel::taskCount() const {
-  uint8_t count = 0;
-
-  for (uint8_t i = 0; i < kMaxTasks; ++i) {
-    if (tasks_[i].inUse) {
-      ++count;
-    }
-  }
-
-  return count;
+  return registeredTaskCount_;
 }
 
 uint8_t Kernel::activeTaskCount() const {
-  uint8_t count = 0;
-
-  for (uint8_t i = 0; i < kMaxTasks; ++i) {
-    if (tasks_[i].inUse && tasks_[i].state == kTaskReady) {
-      ++count;
-    }
-  }
-
-  return count;
+  return readyTaskCount_;
 }
 
 int Kernel::findTaskIndex_(const char* name) const {
