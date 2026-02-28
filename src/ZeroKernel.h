@@ -560,8 +560,8 @@ class Kernel {
   uint32_t totalTickDurationMs_;
   uint32_t totalTaskDurationMs_;
   uint32_t totalLagMs_;
-  uint64_t totalTickCycles_;
-  uint64_t totalTaskCycles_;
+  uint32_t totalTickCycles_;
+  uint32_t totalTaskCycles_;
   TimeMs maxTickDurationMs_;
   TimeMs maxTaskDurationMs_;
   TimeMs maxObservedLagMs_;
