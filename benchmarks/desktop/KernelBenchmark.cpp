@@ -28,11 +28,12 @@ double runBenchmark(bool fastPath,
   ZeroKernel = zerokernel::Kernel();
   outRuns = 0;
 
-  ZeroKernel.subscribe("bench.metric", sink);
   if (fastPath) {
     g_fastTopicKey = zerokernel::Kernel::makeTopicKey("bench.metric");
+    ZeroKernel.subscribeFast(g_fastTopicKey, sink);
     ZeroKernel.addTask("BenchTask", fastBenchmarkTask, 1, 0);
   } else {
+    ZeroKernel.subscribe("bench.metric", sink);
     ZeroKernel.addTask("BenchTask", stringBenchmarkTask, 1, 0);
   }
 
