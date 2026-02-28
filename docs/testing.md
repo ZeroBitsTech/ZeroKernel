@@ -11,7 +11,7 @@
 ## Platform matrix
 
 - `scripts/run_platform_matrix.sh`: compiles platform examples for any installed Arduino cores and skips missing targets cleanly.
-- `scripts/run_resource_matrix.sh`: compiles the same platform examples and prints a cross-target flash/RAM summary plus budget PASS/FAIL lines. Pass `--enforce-budget` to fail the script on a budget regression.
+- `scripts/run_resource_matrix.sh`: compiles the same platform examples and prints a cross-target resource summary plus budget PASS/FAIL lines. Pass `--enforce-budget` to fail the script on a budget regression.
 
 This is intended to keep portability visible even when all boards are not physically connected.
 
@@ -28,7 +28,7 @@ This workflow:
 4. captures serial metrics
 5. prints the before/after comparison
 
-The comparison script also prints baseline vs ZeroKernel RAM and flash usage for the tested ESP8266 sketch pair, then restores `KernelIdentity` automatically. With `--enforce-determinism`, it fails if the ZeroKernel run reports any lag or missed fast-cycle deadlines.
+The comparison script also prints baseline vs ZeroKernel runtime footprint details for the tested ESP8266 sketch pair, then restores `KernelIdentity` automatically. With `--enforce-determinism`, it fails if the ZeroKernel run reports any lag or missed fast-cycle deadlines.
 
 ## ESP32 comparison
 
@@ -40,7 +40,7 @@ This mirrors the Wemos comparison flow on ESP32:
 2. captures serial metrics
 3. flashes the ZeroKernel sketch
 4. captures serial metrics
-5. prints before/after timing plus RAM/flash deltas
+5. prints before/after timing plus runtime footprint deltas
 6. restores `KernelIdentity` automatically
 
 ## Wemos diagnostics
@@ -53,7 +53,7 @@ This flashes a lightweight diagnostics sketch that prints:
 - kernel uptime, state, and ABI version
 - timing report summary
 - task dump lines
-- compile-time flash and RAM usage
+- compile-time RAM usage
 
 ## Cross-board command smoke
 

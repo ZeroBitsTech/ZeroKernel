@@ -35,10 +35,10 @@ The intended position is simple:
 
 Latest measured references:
 
-- ESP8266 `POWER_SAVE` (`UniversalSmokeTest`): `28864 / 80192` RAM, `241156 / 1048576` flash
-- Wemos compare runtime overhead vs blocking baseline: `+744 bytes` RAM, `+3360 bytes` flash
+- ESP8266 `POWER_SAVE` (`UniversalSmokeTest`): `28864 / 80192` RAM
+- Wemos compare runtime overhead vs blocking baseline: `+744 bytes` RAM
 - Wemos determinism gate: `fast_avg_lag_us=0`, `fast_max_lag_us=0`, `fast_miss=0`
-- ESP32 compare runtime overhead vs blocking baseline: `+704 bytes` RAM, `+4588 bytes` flash
+- ESP32 compare runtime overhead vs blocking baseline: `+704 bytes` RAM
 - ESP32 determinism gate: `fast_avg_lag_us=0`, `fast_max_lag_us=0`, `fast_miss=0`
 - Wemos measured free heap during diagnostics: `49280`
 
@@ -51,7 +51,6 @@ Measured on Wemos D1 mini using the blocking baseline and the current ZeroKernel
 | Metric | Before (blocking) | After (ZeroKernel) |
 | --- | ---: | ---: |
 | RAM usage | `28300 / 80192` | `29044 / 80192` |
-| Flash usage | `237092 / 1048576` | `240452 / 1048576` |
 | Fast avg lag | `2512 us` | `0 us` |
 | Fast max lag | `11054 us` | `0 us` |
 | Fast misses | `126` | `0` |
@@ -59,7 +58,6 @@ Measured on Wemos D1 mini using the blocking baseline and the current ZeroKernel
 Tradeoff summary:
 
 - RAM overhead: `+744 bytes`
-- Flash overhead: `+3360 bytes`
 - Determinism maintained: `0 lag`, `0 misses`
 - Measured free heap on Wemos diagnostics: `49280`
 
@@ -72,7 +70,6 @@ Measured on ESP32 using the blocking baseline and the current ZeroKernel compare
 | Metric | Before (blocking) | After (ZeroKernel) |
 | --- | ---: | ---: |
 | RAM usage | `22116 / 327680` | `22820 / 327680` |
-| Flash usage | `280368 / 1310720` | `284956 / 1310720` |
 | Fast avg lag | `2022 us` | `0 us` |
 | Fast max lag | `8156 us` | `0 us` |
 | Fast misses | `124` | `0` |
@@ -80,7 +77,6 @@ Measured on ESP32 using the blocking baseline and the current ZeroKernel compare
 Tradeoff summary:
 
 - RAM overhead: `+704 bytes`
-- Flash overhead: `+4588 bytes`
 - Determinism maintained: `0 lag`, `0 misses`
 
 The ESP32 tradeoff is also healthy: the footprint increase is small relative to total headroom, while the scheduling result is materially better under the same workload.
