@@ -20,6 +20,14 @@ inline uint32_t atomicLoadU32(const volatile uint32_t* target) {
 #endif
 }
 
+inline void atomicStoreU32(volatile uint32_t* target, uint32_t value) {
+#if defined(__GNUC__) || defined(__clang__)
+  __atomic_store_n(target, value, __ATOMIC_RELAXED);
+#else
+  *target = value;
+#endif
+}
+
 inline uint32_t atomicOrU32(volatile uint32_t* target, uint32_t mask) {
 #if defined(__GNUC__) || defined(__clang__)
   return __atomic_fetch_or(target, mask, __ATOMIC_RELAXED);

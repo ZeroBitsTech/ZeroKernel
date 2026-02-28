@@ -459,6 +459,8 @@ Important lean-build switches:
 
 `ZEROKERNEL_PROFILE_NETWORK_NODE` biases the runtime toward WiFi/BLE/MQTT-style firmware: key-first routing, bounded command/work queues, stronger drain budgets, and leaner metadata by default.
 `ZEROKERNEL_PROFILE_LEAN_NET` pushes harder on that same direction for module-heavy nodes: smaller queue defaults, stripped diagnostics, topic-key routing, and tighter runtime state for optional network helpers.
+- `ZEROKERNEL_PROFILE_TINY` now also defaults to key-first routing and stripped extended task metrics, so the name better matches the footprint target.
+- `ZEROKERNEL_PROFILE_NETWORK_NODE` now keeps capability gating enabled, which aligns the profile with network-aware runtime supervision.
 - `ZEROKERNEL_ENABLE_DEBUG_DUMP`
 
 For small builds, the goal is to preserve the public API while collapsing runtime cost toward key-based routing and stripped diagnostics.

@@ -410,7 +410,7 @@ class Kernel {
 
   struct TaskSlot {
     TaskCallback callback;
-    const char* name;
+    char name[kTaskNameLength];
     TimeMs intervalMs;
     TimeMs maxRuntimeMs;
     TimeMs heartbeatTimeoutMs;

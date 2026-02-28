@@ -444,6 +444,22 @@ int testTaskScheduling() {
   return g_failures;
 }
 
+int testTaskNameCopy() {
+  zerokernel::Kernel isolatedKernel;
+  char mutableName[24] = "MutableTask";
+
+  expectTrue(isolatedKernel.addTask(mutableName, periodicTask, 25, 0), "add mutable-name task");
+  mutableName[0] = 'X';
+
+  zerokernel::Kernel::TaskStats stats;
+  expectTrue(isolatedKernel.getTaskStats("MutableTask", stats),
+             "task lookup still works after source buffer changes");
+  expectTrue(stats.name[0] == 'M', "stored task name is copied into kernel storage");
+  expectTrue(!isolatedKernel.getTaskStats("XutableTask", stats),
+             "mutating source buffer does not rename stored task");
+  return g_failures;
+}
+
 int testNextWakeHint() {
   zerokernel::Kernel isolatedKernel;
   expectTrue(isolatedKernel.addTask("Wake", periodicTask, 50, 0), "add wake task");
@@ -1124,6 +1140,7 @@ int main() {
   testEventFlags();
   testHeartbeatTimeout();
   testTaskScheduling();
+  testTaskNameCopy();
   testNextWakeHint();
   testPriorityScheduling();
   testSafeMode();

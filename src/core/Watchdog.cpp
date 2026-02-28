@@ -166,7 +166,7 @@ void Kernel::initializeTaskSlot_(TaskSlot& slot,
   slot = TaskSlot();
   slot.inUse = true;
   slot.startEnabled = config.startEnabled;
-  slot.name = config.name;
+  copyLabel_(slot.name, sizeof(slot.name), config.name);
   slot.callback = config.callback;
   slot.intervalMs = config.intervalMs;
   slot.maxRuntimeMs = config.maxRuntimeMs;
@@ -347,6 +347,7 @@ bool Kernel::isTaskDue_(const TaskSlot& slot, TimeMs nowMs) const {
     return false;
   }
 
+  // Unsigned subtraction keeps due checks stable across millis() wrap-around.
   return (nowMs - slot.lastRunAtMs) >= slot.intervalMs;
 }
 

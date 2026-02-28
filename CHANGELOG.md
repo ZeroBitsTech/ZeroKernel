@@ -10,6 +10,9 @@
 - Improved `ZeroHttpPump` and `ZeroMqttPump` throughput by allowing bounded intra-tick progress.
 - Added `ZEROKERNEL_PROFILE_LEAN_NET` for tighter network-oriented builds.
 - Reduced network module state again by compacting transport metrics counters.
+- Hardened config validation with compile-time capacity guards and conflicting-flag checks.
+- Copied task names into internal storage to avoid dangling name pointers.
+- Replaced Xtensa platform idle hint from a no-op with a real idle instruction.
 
 ## 1.3.x
 

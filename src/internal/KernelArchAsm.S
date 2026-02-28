@@ -2,7 +2,7 @@
   .text
   .global zk_arch_idle_hint_asm
 zk_arch_idle_hint_asm:
-  nop
+  waiti 0
 #if defined(__XTENSA_WINDOWED_ABI__)
   retw.n
 #else

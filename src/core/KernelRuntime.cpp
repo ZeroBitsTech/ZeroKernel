@@ -88,7 +88,7 @@ void Kernel::begin(ClockSource clockSource) {
   resetCommandQueue_();
   resetWorkQueue_();
   resetTrace_();
-  eventFlags_ = 0;
+  internal::atomicStoreU32(&eventFlags_, 0);
   lastPanic_ = PanicInfo();
   safeMode_ = false;
   safeModePriorityFloor_ = kPriorityHigh;
