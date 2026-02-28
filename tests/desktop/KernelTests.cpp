@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "ZeroKernel.h"
+#include "modules/net/ZeroWiFiMaintainer.h"
 
 namespace {
 
@@ -17,8 +18,15 @@ int g_fastEvents = 0;
 int g_workRuns = 0;
 int g_backpressureCount = 0;
 int g_stateChanges = 0;
+int g_wifiConnectCalls = 0;
+int g_wifiDisconnectCalls = 0;
+int g_wifiStateWrites = 0;
+int g_wifiStateEvents = 0;
 unsigned long g_fakeNowMs = 0;
 uint8_t g_lastState = 0;
+bool g_wifiLinkUp = false;
+bool g_wifiLastState = false;
+unsigned long g_wifiLastWriteAtMs = 0;
 unsigned long g_lastCommandValue = 0;
 unsigned long g_lastFastValue = 0;
 long g_backpressureFirst = -1;
@@ -52,6 +60,13 @@ void onTypedEvent(const char*, const zerokernel::Kernel::EventValue& value) {
 
   if (value.type == zerokernel::Kernel::kEventUnsigned && value.unsignedValue == 99UL) {
     ++g_typedEvents;
+  }
+}
+
+void onWifiStateEvent(const char*, const zerokernel::Kernel::EventValue& value) {
+  if (value.type == zerokernel::Kernel::kEventBool) {
+    g_wifiLastState = value.boolValue;
+    ++g_wifiStateEvents;
   }
 }
 
@@ -142,6 +157,24 @@ void onDumpLine(const char*) {
 void onStateChange(uint8_t state) {
   ++g_stateChanges;
   g_lastState = state;
+}
+
+bool wifiLinkProbe() {
+  return g_wifiLinkUp;
+}
+
+void wifiConnectStep() {
+  ++g_wifiConnectCalls;
+}
+
+void wifiDisconnectStep() {
+  ++g_wifiDisconnectCalls;
+}
+
+void wifiStateWriter(bool connected, unsigned long nowMs) {
+  g_wifiLastState = connected;
+  g_wifiLastWriteAtMs = nowMs;
+  ++g_wifiStateWrites;
 }
 
 void longRunningTask() {
@@ -650,6 +683,93 @@ int testDebugDump() {
   return g_failures;
 }
 
+int testWiFiMaintainer() {
+  zerokernel::Kernel isolatedKernel;
+  zerokernel::modules::net::ZeroWiFiMaintainer maintainer;
+  const zerokernel::Kernel::TopicKey stateTopicKey =
+      zerokernel::Kernel::makeTopicKey("wifi.state");
+
+  zerokernel::modules::net::ZeroWiFiMaintainer::Config config;
+  config.pollIntervalMs = 100;
+  config.retryBaseMs = 50;
+  config.retryMaxMs = 200;
+  config.emitStateChangesOnly = true;
+  config.manageCapabilities = true;
+  config.capabilityMask = zerokernel::Kernel::kCapNetwork;
+  config.stateTopicKey = stateTopicKey;
+
+  g_fakeNowMs = 0;
+  g_wifiLinkUp = false;
+  g_wifiConnectCalls = 0;
+  g_wifiDisconnectCalls = 0;
+  g_wifiStateWrites = 0;
+  g_wifiStateEvents = 0;
+  g_wifiLastState = false;
+  g_wifiLastWriteAtMs = 0;
+
+  isolatedKernel.begin(fakeClock);
+  expectTrue(isolatedKernel.subscribeTypedFast(stateTopicKey, onWifiStateEvent),
+             "subscribe wifi state fast");
+  maintainer.begin(isolatedKernel,
+                   wifiLinkProbe,
+                   wifiConnectStep,
+                   wifiDisconnectStep,
+                   config,
+                   wifiStateWriter);
+
+  g_fakeNowMs = 1;
+  isolatedKernel.tick();
+  maintainer.tick();
+  expectTrue(g_wifiConnectCalls == 1, "wifi maintainer attempts first connect");
+  expectTrue((isolatedKernel.capabilities() & zerokernel::Kernel::kCapNetwork) == 0,
+             "wifi maintainer disables network capability while offline");
+  expectTrue(g_wifiStateWrites == 0, "wifi maintainer suppresses initial offline notification");
+
+  g_fakeNowMs = 50;
+  isolatedKernel.tick();
+  maintainer.tick();
+  expectTrue(g_wifiConnectCalls == 1, "wifi maintainer respects poll interval");
+
+  g_fakeNowMs = 120;
+  isolatedKernel.tick();
+  maintainer.tick();
+  expectTrue(g_wifiConnectCalls == 2, "wifi maintainer retries after backoff");
+
+  g_wifiLinkUp = true;
+  g_fakeNowMs = 250;
+  isolatedKernel.tick();
+  maintainer.tick();
+  expectTrue(maintainer.isConnected(), "wifi maintainer tracks connected state");
+  expectTrue(maintainer.reconnectTransitions() == 1,
+             "wifi maintainer counts reconnect transition");
+  expectTrue(g_wifiStateWrites == 1, "wifi maintainer writes state on reconnect");
+  expectTrue(g_wifiStateEvents == 1, "wifi maintainer publishes reconnect state");
+  expectTrue(g_wifiLastState, "wifi maintainer publishes connected state");
+  expectTrue(g_wifiLastWriteAtMs == 250, "wifi maintainer writes timestamp");
+  expectTrue((isolatedKernel.capabilities() & zerokernel::Kernel::kCapNetwork) != 0,
+             "wifi maintainer restores network capability");
+
+  g_fakeNowMs = 260;
+  isolatedKernel.tick();
+  maintainer.tick();
+  expectTrue(g_wifiStateWrites == 1, "wifi maintainer suppresses duplicate connected event");
+
+  g_wifiLinkUp = false;
+  g_fakeNowMs = 400;
+  isolatedKernel.tick();
+  maintainer.tick();
+  expectTrue(!maintainer.isConnected(), "wifi maintainer detects disconnect");
+  expectTrue(g_wifiDisconnectCalls == 1, "wifi maintainer calls disconnect step");
+  expectTrue(g_wifiStateWrites == 2, "wifi maintainer emits offline transition");
+  expectTrue(g_wifiStateEvents == 2, "wifi maintainer publishes offline transition");
+  expectTrue(!g_wifiLastState, "wifi maintainer publishes offline state");
+  expectTrue(maintainer.connectAttempts() == 3, "wifi maintainer retries again after disconnect");
+
+  expectTrue(isolatedKernel.unsubscribeTypedFast(stateTopicKey, onWifiStateEvent),
+             "unsubscribe wifi state fast");
+  return g_failures;
+}
+
 }  // namespace
 
 int main() {
@@ -666,8 +786,15 @@ int main() {
   g_workRuns = 0;
   g_backpressureCount = 0;
   g_stateChanges = 0;
+  g_wifiConnectCalls = 0;
+  g_wifiDisconnectCalls = 0;
+  g_wifiStateWrites = 0;
+  g_wifiStateEvents = 0;
   g_fakeNowMs = 0;
   g_lastState = 0;
+  g_wifiLinkUp = false;
+  g_wifiLastState = false;
+  g_wifiLastWriteAtMs = 0;
   g_lastCommandValue = 0;
   g_lastFastValue = 0;
   g_backpressureFirst = -1;
@@ -696,6 +823,7 @@ int main() {
   testQueueBackpressure();
   testHardwareWatchdogBridge();
   testDebugDump();
+  testWiFiMaintainer();
 
   if (g_failures == 0) {
     printf("All ZeroKernel desktop tests passed.\n");
