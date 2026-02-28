@@ -1,6 +1,9 @@
 #include <stdio.h>
 
 #include "ZeroKernel.h"
+#include "modules/net/ZeroHttpPump.h"
+#include "modules/net/ZeroMqttPump.h"
+#include "modules/net/ZeroTransportMetrics.h"
 #include "modules/net/ZeroWiFiMaintainer.h"
 
 namespace {
@@ -22,10 +25,23 @@ int g_wifiConnectCalls = 0;
 int g_wifiDisconnectCalls = 0;
 int g_wifiStateWrites = 0;
 int g_wifiStateEvents = 0;
+int g_httpConnectCalls = 0;
+int g_httpWriteCalls = 0;
+int g_httpReadCalls = 0;
+int g_httpCloseCalls = 0;
+int g_httpCompletionEvents = 0;
+int g_mqttConnectCalls = 0;
+int g_mqttLoopCalls = 0;
+int g_mqttPublishCalls = 0;
+int g_mqttStateEvents = 0;
 unsigned long g_fakeNowMs = 0;
 uint8_t g_lastState = 0;
 bool g_wifiLinkUp = false;
 bool g_wifiLastState = false;
+bool g_httpLastCompletion = false;
+bool g_mqttLinkUp = false;
+bool g_mqttLastState = false;
+bool g_mqttPublishShouldFail = false;
 unsigned long g_wifiLastWriteAtMs = 0;
 unsigned long g_lastCommandValue = 0;
 unsigned long g_lastFastValue = 0;
@@ -67,6 +83,20 @@ void onWifiStateEvent(const char*, const zerokernel::Kernel::EventValue& value) 
   if (value.type == zerokernel::Kernel::kEventBool) {
     g_wifiLastState = value.boolValue;
     ++g_wifiStateEvents;
+  }
+}
+
+void onHttpCompletionEvent(const char*, const zerokernel::Kernel::EventValue& value) {
+  if (value.type == zerokernel::Kernel::kEventBool) {
+    g_httpLastCompletion = value.boolValue;
+    ++g_httpCompletionEvents;
+  }
+}
+
+void onMqttStateEvent(const char*, const zerokernel::Kernel::EventValue& value) {
+  if (value.type == zerokernel::Kernel::kEventBool) {
+    g_mqttLastState = value.boolValue;
+    ++g_mqttStateEvents;
   }
 }
 
@@ -175,6 +205,65 @@ void wifiStateWriter(bool connected, unsigned long nowMs) {
   g_wifiLastState = connected;
   g_wifiLastWriteAtMs = nowMs;
   ++g_wifiStateWrites;
+}
+
+zerokernel::modules::net::ZeroHttpPump::StepResult httpConnectStep(
+    const zerokernel::modules::net::ZeroHttpPump::Request&,
+    void*) {
+  ++g_httpConnectCalls;
+  if (g_httpConnectCalls == 1) {
+    return zerokernel::modules::net::ZeroHttpPump::kStepPending;
+  }
+  return zerokernel::modules::net::ZeroHttpPump::kStepComplete;
+}
+
+zerokernel::modules::net::ZeroHttpPump::StepResult httpWriteStep(
+    const zerokernel::modules::net::ZeroHttpPump::Request&,
+    void*) {
+  ++g_httpWriteCalls;
+  return zerokernel::modules::net::ZeroHttpPump::kStepComplete;
+}
+
+zerokernel::modules::net::ZeroHttpPump::StepResult httpReadStep(
+    const zerokernel::modules::net::ZeroHttpPump::Request&,
+    void*) {
+  ++g_httpReadCalls;
+  if (g_httpReadCalls == 1) {
+    return zerokernel::modules::net::ZeroHttpPump::kStepFailed;
+  }
+  return zerokernel::modules::net::ZeroHttpPump::kStepComplete;
+}
+
+zerokernel::modules::net::ZeroHttpPump::StepResult httpCloseStep(
+    const zerokernel::modules::net::ZeroHttpPump::Request&,
+    void*) {
+  ++g_httpCloseCalls;
+  return zerokernel::modules::net::ZeroHttpPump::kStepComplete;
+}
+
+bool mqttLinkProbe() {
+  return g_mqttLinkUp;
+}
+
+bool mqttConnectStep(void*) {
+  ++g_mqttConnectCalls;
+  g_mqttLinkUp = true;
+  return true;
+}
+
+void mqttLoopStep(void*) {
+  ++g_mqttLoopCalls;
+}
+
+bool mqttPublishStep(zerokernel::Kernel::TopicKey,
+                     const zerokernel::Kernel::EventValue&,
+                     void*) {
+  ++g_mqttPublishCalls;
+  if (g_mqttPublishShouldFail) {
+    g_mqttPublishShouldFail = false;
+    return false;
+  }
+  return true;
 }
 
 void longRunningTask() {
@@ -770,6 +859,220 @@ int testWiFiMaintainer() {
   return g_failures;
 }
 
+int testTransportMetricsModule() {
+  zerokernel::modules::net::ZeroTransportMetrics metrics;
+
+  metrics.recordConnectAttempt();
+  metrics.recordConnectResult(false, 5);
+  metrics.recordConnectAttempt();
+  metrics.recordConnectResult(true, 3);
+  metrics.recordSendQueued(2);
+  metrics.recordSendAttempt();
+  metrics.recordSendResult(true, 7, 11);
+  metrics.recordQueueDrop();
+  metrics.recordBackoffSchedule();
+  metrics.recordLoopCall();
+
+  const zerokernel::modules::net::ZeroTransportMetrics::Snapshot snapshot =
+      metrics.snapshot();
+  expectTrue(snapshot.connectAttempts == 2, "transport metrics count connect attempts");
+  expectTrue(snapshot.connectFailures == 1, "transport metrics count connect failures");
+  expectTrue(snapshot.connectSuccesses == 1, "transport metrics count connect successes");
+  expectTrue(snapshot.sendAttempts == 1, "transport metrics count send attempts");
+  expectTrue(snapshot.sendSuccesses == 1, "transport metrics count send successes");
+  expectTrue(snapshot.queueDrops == 1, "transport metrics count queue drops");
+  expectTrue(snapshot.backoffSchedules == 1, "transport metrics count backoff schedules");
+  expectTrue(snapshot.loopCalls == 1, "transport metrics count loop calls");
+  expectTrue(snapshot.worstQueueDwellMs == 11, "transport metrics track queue dwell");
+  expectTrue(snapshot.maxQueueDepth == 2, "transport metrics track queue depth");
+  return g_failures;
+}
+
+int testHttpPumpModule() {
+  zerokernel::Kernel isolatedKernel;
+  zerokernel::modules::net::ZeroHttpPump pump;
+  const zerokernel::Kernel::TopicKey completionKey =
+      zerokernel::Kernel::makeTopicKey("http.done");
+
+  zerokernel::modules::net::ZeroHttpPump::Config config;
+  config.retryBaseMs = 20;
+  config.retryMaxMs = 40;
+  config.maxRetries = 1;
+  config.emitCompletionEvents = true;
+
+  g_fakeNowMs = 0;
+  g_httpConnectCalls = 0;
+  g_httpWriteCalls = 0;
+  g_httpReadCalls = 0;
+  g_httpCloseCalls = 0;
+  g_httpCompletionEvents = 0;
+  g_httpLastCompletion = false;
+
+  isolatedKernel.begin(fakeClock);
+  expectTrue(isolatedKernel.subscribeTypedFast(completionKey, onHttpCompletionEvent),
+             "subscribe http completion");
+  pump.begin(isolatedKernel,
+             httpConnectStep,
+             httpWriteStep,
+             httpReadStep,
+             httpCloseStep,
+             config);
+
+  zerokernel::modules::net::ZeroHttpPump::Request request;
+  request.path = "/api/data";
+  request.contentType = "application/json";
+  request.body = "{}";
+  request.bodyLength = 2;
+  request.completionTopicKey = completionKey;
+
+  expectTrue(pump.enqueue(request), "enqueue http request");
+  g_fakeNowMs = 1;
+  isolatedKernel.tick();
+  pump.tick();
+  expectTrue(pump.isBusy(), "http pump becomes busy");
+  expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseConnecting,
+             "http pump starts in connect phase");
+
+  g_fakeNowMs = 2;
+  isolatedKernel.tick();
+  pump.tick();
+  expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseWriting,
+             "http pump advances to write phase");
+
+  g_fakeNowMs = 3;
+  isolatedKernel.tick();
+  pump.tick();
+  expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseReading,
+             "http pump advances to read phase");
+
+  g_fakeNowMs = 4;
+  isolatedKernel.tick();
+  pump.tick();
+  expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseConnecting,
+             "http pump retries after read failure");
+
+  g_fakeNowMs = 10;
+  isolatedKernel.tick();
+  pump.tick();
+  expectTrue(g_httpConnectCalls == 2, "http pump waits for retry window");
+
+  g_fakeNowMs = 24;
+  isolatedKernel.tick();
+  pump.tick();
+  g_fakeNowMs = 25;
+  isolatedKernel.tick();
+  pump.tick();
+  g_fakeNowMs = 26;
+  isolatedKernel.tick();
+  pump.tick();
+  g_fakeNowMs = 27;
+  isolatedKernel.tick();
+  pump.tick();
+
+  const zerokernel::modules::net::ZeroTransportMetrics::Snapshot httpMetrics =
+      pump.metrics().snapshot();
+  expectTrue(!pump.isBusy(), "http pump returns idle after success");
+  expectTrue(httpMetrics.connectAttempts == 2, "http pump records retry connect attempt");
+  expectTrue(httpMetrics.sendFailures == 1, "http pump records send failure");
+  expectTrue(httpMetrics.sendSuccesses == 1, "http pump records send success");
+  expectTrue(httpMetrics.backoffSchedules == 1, "http pump records backoff");
+  expectTrue(g_httpCompletionEvents == 1, "http pump publishes completion event");
+  expectTrue(g_httpLastCompletion, "http pump publishes successful completion");
+
+  for (int index = 0; index < 5; ++index) {
+    expectTrue(pump.enqueue(request), "http pump accepts bounded queue item");
+  }
+  expectTrue(pump.queuedCount() == zerokernel::modules::net::ZeroHttpPump::kQueueCapacity,
+             "http pump queue remains bounded");
+  expectTrue(pump.metrics().snapshot().queueDrops == 1, "http pump drops oldest on overflow");
+
+  expectTrue(isolatedKernel.unsubscribeTypedFast(completionKey, onHttpCompletionEvent),
+             "unsubscribe http completion");
+  return g_failures;
+}
+
+int testMqttPumpModule() {
+  zerokernel::Kernel isolatedKernel;
+  zerokernel::modules::net::ZeroMqttPump pump;
+  const zerokernel::Kernel::TopicKey stateKey =
+      zerokernel::Kernel::makeTopicKey("mqtt.link");
+
+  zerokernel::modules::net::ZeroMqttPump::Config config;
+  config.pollIntervalMs = 0;
+  config.retryBaseMs = 5;
+  config.retryMaxMs = 10;
+  config.maxRetries = 1;
+  config.stateTopicKey = stateKey;
+
+  g_fakeNowMs = 0;
+  g_mqttConnectCalls = 0;
+  g_mqttLoopCalls = 0;
+  g_mqttPublishCalls = 0;
+  g_mqttStateEvents = 0;
+  g_mqttLinkUp = false;
+  g_mqttLastState = false;
+  g_mqttPublishShouldFail = true;
+
+  isolatedKernel.begin(fakeClock);
+  expectTrue(isolatedKernel.subscribeTypedFast(stateKey, onMqttStateEvent),
+             "subscribe mqtt state");
+  pump.begin(isolatedKernel,
+             mqttLinkProbe,
+             mqttConnectStep,
+             mqttLoopStep,
+             mqttPublishStep,
+             config);
+
+  expectTrue(pump.enqueue(zerokernel::Kernel::makeTopicKey("mqtt.out"),
+                          zerokernel::Kernel::EventValue::fromUnsigned(7UL)),
+             "enqueue mqtt message");
+
+  g_fakeNowMs = 1;
+  isolatedKernel.tick();
+  pump.tick();
+  expectTrue(pump.isConnected(), "mqtt pump connects on first retry");
+  expectTrue(g_mqttStateEvents == 1, "mqtt pump publishes connected state");
+  expectTrue(g_mqttLastState, "mqtt pump reports connected");
+
+  g_fakeNowMs = 2;
+  isolatedKernel.tick();
+  pump.tick();
+  expectTrue(g_mqttPublishCalls == 1, "mqtt pump attempts first publish");
+  expectTrue(pump.queuedCount() == 1, "mqtt pump keeps message queued after failure");
+
+  g_fakeNowMs = 4;
+  isolatedKernel.tick();
+  pump.tick();
+  expectTrue(g_mqttPublishCalls == 1, "mqtt pump honors publish backoff");
+
+  g_fakeNowMs = 7;
+  isolatedKernel.tick();
+  pump.tick();
+  expectTrue(g_mqttPublishCalls == 2, "mqtt pump retries publish after backoff");
+  expectTrue(pump.queuedCount() == 0, "mqtt pump drains queue after retry success");
+  expectTrue(g_mqttLoopCalls >= 2, "mqtt pump calls loop while connected");
+
+  for (int index = 0; index < 7; ++index) {
+    expectTrue(
+        pump.enqueue(zerokernel::Kernel::makeTopicKey("mqtt.out"),
+                     zerokernel::Kernel::EventValue::fromLong(index)),
+        "enqueue mqtt queue item");
+  }
+
+  const zerokernel::modules::net::ZeroTransportMetrics::Snapshot mqttMetrics =
+      pump.metrics().snapshot();
+  expectTrue(pump.queuedCount() == zerokernel::modules::net::ZeroMqttPump::kQueueCapacity,
+             "mqtt pump queue remains bounded");
+  expectTrue(mqttMetrics.sendFailures == 1, "mqtt pump records send failure");
+  expectTrue(mqttMetrics.sendSuccesses == 1, "mqtt pump records send success");
+  expectTrue(mqttMetrics.queueDrops == 1, "mqtt pump records queue drop");
+  expectTrue(mqttMetrics.backoffSchedules == 1, "mqtt pump records publish backoff");
+
+  expectTrue(isolatedKernel.unsubscribeTypedFast(stateKey, onMqttStateEvent),
+             "unsubscribe mqtt state");
+  return g_failures;
+}
+
 }  // namespace
 
 int main() {
@@ -790,10 +1093,23 @@ int main() {
   g_wifiDisconnectCalls = 0;
   g_wifiStateWrites = 0;
   g_wifiStateEvents = 0;
+  g_httpConnectCalls = 0;
+  g_httpWriteCalls = 0;
+  g_httpReadCalls = 0;
+  g_httpCloseCalls = 0;
+  g_httpCompletionEvents = 0;
+  g_mqttConnectCalls = 0;
+  g_mqttLoopCalls = 0;
+  g_mqttPublishCalls = 0;
+  g_mqttStateEvents = 0;
   g_fakeNowMs = 0;
   g_lastState = 0;
   g_wifiLinkUp = false;
   g_wifiLastState = false;
+  g_httpLastCompletion = false;
+  g_mqttLinkUp = false;
+  g_mqttLastState = false;
+  g_mqttPublishShouldFail = false;
   g_wifiLastWriteAtMs = 0;
   g_lastCommandValue = 0;
   g_lastFastValue = 0;
@@ -824,6 +1140,9 @@ int main() {
   testHardwareWatchdogBridge();
   testDebugDump();
   testWiFiMaintainer();
+  testTransportMetricsModule();
+  testHttpPumpModule();
+  testMqttPumpModule();
 
   if (g_failures == 0) {
     printf("All ZeroKernel desktop tests passed.\n");
