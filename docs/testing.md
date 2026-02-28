@@ -55,6 +55,28 @@ This flashes a lightweight diagnostics sketch that prints:
 - task dump lines
 - compile-time RAM usage
 
+## Higher-intent demos
+
+- `examples/ESP32TelemetryNode`
+- `scripts/run_esp32_telemetry_demo.sh [/dev/ttyUSB1]`
+
+This runs a more realistic ESP32 node with:
+
+- WiFi maintenance and reconnect signalling
+- capability-gated diagnostics
+- deferred telemetry events
+- periodic runtime summaries over serial
+
+- `examples/FaultInjectionDemo`
+- `scripts/run_fault_injection_demo.sh [/dev/ttyUSB0] [fqbn]`
+
+This runs a fault-focused runtime demo with:
+
+- deliberate overruns
+- signal hook output
+- safe-mode entry
+- automatic return to normal mode
+
 ## Cross-board command smoke
 
 - `examples/CommandQueue`

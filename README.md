@@ -238,6 +238,18 @@ void loop() {
 }
 ```
 
+## Higher-Intent Demo Projects
+
+- `examples/ESP32TelemetryNode`:
+  a richer ESP32 node example with WiFi maintenance, capability-gated diagnostics, heartbeat events, and periodic runtime summaries.
+- `examples/FaultInjectionDemo`:
+  a fault-focused demo that injects overruns, exposes watchdog signals, enters safe mode, and then returns to normal operation.
+
+Quick runners:
+
+- `scripts/run_esp32_telemetry_demo.sh /dev/ttyUSB1`
+- `scripts/run_fault_injection_demo.sh /dev/ttyUSB0`
+
 ## Validation Pipeline
 
 ZeroKernel already includes local and hardware validation:
