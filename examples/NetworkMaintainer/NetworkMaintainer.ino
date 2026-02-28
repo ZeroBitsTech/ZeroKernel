@@ -1,4 +1,5 @@
 #include <ZeroKernel.h>
+#include <adapters/PowerSaveLoopAdapter.h>
 #include <modules/net/ZeroWiFiMaintainer.h>
 
 #if defined(ARDUINO_ARCH_ESP8266)
@@ -19,6 +20,10 @@ const char* kPassword = "replace-me";
 const Kernel::TopicKey kWiFiStateTopic = Kernel::makeTopicKey("wifi.link");
 
 ZeroWiFiMaintainer g_wifiMaintainer;
+
+unsigned long boardMillis() {
+  return millis();
+}
 
 bool isWiFiConnected() {
   return WiFi.status() == WL_CONNECTED;
@@ -68,7 +73,7 @@ void setup() {
   WiFi.setAutoReconnect(false);
   WiFi.persistent(false);
 
-  ZeroKernel.begin();
+  ZeroKernel.begin(boardMillis);
   ZeroKernel.subscribeTypedFast(kWiFiStateTopic, onWiFiState);
 
   ZeroWiFiMaintainer::Config config;
@@ -86,6 +91,6 @@ void setup() {
 }
 
 void loop() {
-  ZeroKernel.tick();
+  zerokernel::adapters::powerSaveTick(ZeroKernel);
   g_wifiMaintainer.tick();
 }

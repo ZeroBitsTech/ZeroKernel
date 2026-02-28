@@ -1,4 +1,5 @@
 #include <ZeroKernel.h>
+#include <adapters/PowerSaveLoopAdapter.h>
 #include <modules/net/ZeroTransportMetrics.h>
 
 using zerokernel::modules::net::ZeroTransportMetrics;
@@ -6,6 +7,10 @@ using zerokernel::modules::net::ZeroTransportMetrics;
 namespace {
 
 ZeroTransportMetrics g_metrics;
+
+unsigned long boardMillis() {
+  return millis();
+}
 
 void updateMetricsTask() {
   static bool toggle = false;
@@ -42,11 +47,11 @@ void setup() {
   Serial.begin(115200);
   delay(50);
 
-  ZeroKernel.begin();
+  ZeroKernel.begin(boardMillis);
   ZeroKernel.addTask("MetricsTick", updateMetricsTask, 500, 0);
   ZeroKernel.addTask("MetricsReport", reportTask, 1000, 0);
 }
 
 void loop() {
-  ZeroKernel.tick();
+  zerokernel::adapters::powerSaveTick(ZeroKernel);
 }

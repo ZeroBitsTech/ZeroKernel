@@ -1,4 +1,5 @@
 #include <ZeroKernel.h>
+#include <adapters/PowerSaveLoopAdapter.h>
 #include <modules/net/ZeroHttpPump.h>
 
 using zerokernel::Kernel;
@@ -10,6 +11,10 @@ ZeroHttpPump g_httpPump;
 bool g_connectPending = true;
 unsigned long g_requestId = 0;
 const Kernel::TopicKey kCompletionTopic = Kernel::makeTopicKey("http.done");
+
+unsigned long boardMillis() {
+  return millis();
+}
 
 ZeroHttpPump::StepResult connectStep(const ZeroHttpPump::Request&, void*) {
   if (g_connectPending) {
@@ -78,7 +83,7 @@ void setup() {
   Serial.begin(115200);
   delay(50);
 
-  ZeroKernel.begin();
+  ZeroKernel.begin(boardMillis);
   ZeroKernel.subscribeTypedFast(kCompletionTopic, onCompletion);
 
   ZeroHttpPump::Config config;
@@ -93,6 +98,6 @@ void setup() {
 }
 
 void loop() {
-  ZeroKernel.tick();
+  zerokernel::adapters::powerSaveTick(ZeroKernel);
   g_httpPump.tick();
 }

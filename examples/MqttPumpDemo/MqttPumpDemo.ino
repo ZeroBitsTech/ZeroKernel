@@ -1,4 +1,5 @@
 #include <ZeroKernel.h>
+#include <adapters/PowerSaveLoopAdapter.h>
 #include <modules/net/ZeroMqttPump.h>
 
 using zerokernel::Kernel;
@@ -12,6 +13,10 @@ bool g_failNextPublish = true;
 unsigned long g_publishValue = 0;
 const Kernel::TopicKey kBrokerStateTopic = Kernel::makeTopicKey("mqtt.state");
 const Kernel::TopicKey kPublishTopic = Kernel::makeTopicKey("mqtt.out");
+
+unsigned long boardMillis() {
+  return millis();
+}
 
 bool linkProbe() {
   return g_brokerConnected;
@@ -66,7 +71,7 @@ void setup() {
   Serial.begin(115200);
   delay(50);
 
-  ZeroKernel.begin();
+  ZeroKernel.begin(boardMillis);
   ZeroKernel.subscribeTypedFast(kBrokerStateTopic, onStateEvent);
 
   ZeroMqttPump::Config config;
@@ -83,6 +88,6 @@ void setup() {
 }
 
 void loop() {
-  ZeroKernel.tick();
+  zerokernel::adapters::powerSaveTick(ZeroKernel);
   g_mqttPump.tick();
 }
