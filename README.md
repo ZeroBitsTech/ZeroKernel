@@ -124,8 +124,11 @@ void loop() {
   trackSampleTiming(nowUs);
   ++sampleRuns;
 
+  float ax = 0.0f;
+  float ay = 0.0f;
+  float az = 1.0f;
   readAccel(ax, ay, az);
-  updateMotionModel();
+  updateMotionModel(ax, ay, az);
 
   if (shouldSend && canCapture) {
     capturePacket(true);
@@ -133,7 +136,10 @@ void loop() {
     capturePacket(false);
   }
 
-  flushQueueOnce();
+  if (txCount > 0) {
+    flushQueueOnce();
+  }
+
   delay(LOOP_DELAY_MS);
 }
 ```
@@ -144,9 +150,25 @@ ZeroKernel rewrite:
 void setup() {
   ZeroKernel.begin(zerokernel::adapters::arduinoMillisClock);
 
+  zerokernel::Kernel::TaskConfig sampleTask = {
+      "Sample",
+      sampleSensorTask,
+      LOOP_DELAY_MS,
+      4,
+      0,
+      zerokernel::Kernel::kPriorityCritical,
+      true,
+      {0,
+       static_cast<uint8_t>(zerokernel::Kernel::kContractRunImmediate |
+                            zerokernel::Kernel::kContractDropIfLate),
+       0,
+       0,
+       0},
+      zerokernel::Kernel::kCapIO};
+
   ZeroKernel.addTask(sampleTask);
-  ZeroKernel.addTask(heartbeatTaskConfig);
   ZeroKernel.addTask(flushTask);
+  ZeroKernel.addTask(heartbeatTaskConfig);
   ZeroKernel.addTask(buzzerTaskConfig);
   ZeroKernel.addTask(tempTask);
   ZeroKernel.addTask(statusTask);
