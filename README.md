@@ -89,21 +89,23 @@ Measured on a real `ESP8266` direct-AP seismic node using:
 - MPU6050-class accelerometer over I2C
 - local buzzer alarm output
 - direct access point mode with queued HTTP delivery
+- live local backend over Wi-Fi AP during the test window
 
 The original firmware was a single blocking loop. The ZeroKernel rewrite split the workload into sampling, heartbeat, flush, buzzer, temperature, and status tasks.
 
-| Metric | Before (direct loop) | After (ZeroKernel) |
+| Metric | Before (direct loop) | After (ZeroKernel, tuned) |
 | --- | ---: | ---: |
-| Sample runs (5s window) | `482` | `501` |
-| Fast avg lag | `227586 us` | `0 us` |
-| Fast max lag | `316934 us` | `0 us` |
-| Fast misses | `482` | `0` |
+| Sample runs (5s window) | `476` | `501` |
+| Fast avg lag | `5393 us` | `6 us` |
+| Fast max lag | `21733 us` | `2378 us` |
+| Fast misses | `406` | `1` |
+| Successful local sends | `5` | `7` |
 
 Tradeoff summary:
 
-- The direct-loop version drifted badly under the same sensor workload.
-- The ZeroKernel version stayed phase-aligned and deterministic.
-- This is the kind of workload where the difference is immediately visible in real behavior, not just in synthetic benchmarks.
+- The direct-loop version remains functional, but it drifts and drops timing quality once live HTTP delivery is active.
+- The tuned ZeroKernel version keeps the same node online, preserves successful local delivery, and holds sensor timing far closer to the target schedule.
+- This is the kind of workload where the difference is visible on real hardware under real transport load, not only in a synthetic lab loop.
 
 ## ESP32 Telemetry Parity
 
