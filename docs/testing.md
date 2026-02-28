@@ -67,6 +67,16 @@ This runs a more realistic ESP32 node with:
 - deferred telemetry events
 - periodic runtime summaries over serial
 
+- `examples/ESP32TelemetryBaseline`
+- `scripts/run_esp32_telemetry_compare.sh [/dev/ttyUSB1]`
+
+This compares the richer ESP32 telemetry workload against a manual-loop baseline and reports:
+
+- sample cadence lag
+- missed fast-cycle deadlines
+- RAM deltas
+- activity counts per 5-second window
+
 - `examples/FaultInjectionDemo`
 - `scripts/run_fault_injection_demo.sh [/dev/ttyUSB0] [fqbn]`
 
@@ -76,6 +86,16 @@ This runs a fault-focused runtime demo with:
 - signal hook output
 - safe-mode entry
 - automatic return to normal mode
+
+- `examples/FaultInjectionBaseline`
+- `scripts/run_fault_injection_compare.sh [/dev/ttyUSB0] [fqbn]`
+
+This compares the fault-oriented workload against a manual-loop baseline and reports:
+
+- heartbeat cadence lag
+- failure and recovery counts
+- RAM deltas
+- ending runtime state
 
 ## Cross-board command smoke
 

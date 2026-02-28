@@ -22,6 +22,16 @@ unsigned long gLastSample = 0;
 unsigned long gHeartbeatCount = 0;
 unsigned long gLastConnectAttemptMs = 0;
 bool gDiagnosticsEnabled = true;
+unsigned long gSummaryStartedAtMs = 0;
+unsigned long gExpectedSampleAtUs = 0;
+uint32_t gSampleRuns = 0;
+uint32_t gTelemetryRuns = 0;
+uint32_t gWiFiRuns = 0;
+uint32_t gStatsRuns = 0;
+uint32_t gDiagToggles = 0;
+uint32_t gFastMiss = 0;
+uint32_t gFastMaxLagUs = 0;
+uint64_t gFastLagTotalUs = 0;
 
 const char* stateName(uint8_t state) {
   switch (state) {
@@ -69,6 +79,18 @@ bool credentialsLookConfigured() {
          strcmp(kPassword, "replace-with-password") != 0;
 }
 
+void resetWindow(unsigned long nowMs) {
+  gSampleRuns = 0;
+  gTelemetryRuns = 0;
+  gWiFiRuns = 0;
+  gStatsRuns = 0;
+  gDiagToggles = 0;
+  gFastMiss = 0;
+  gFastMaxLagUs = 0;
+  gFastLagTotalUs = 0;
+  gSummaryStartedAtMs = nowMs;
+}
+
 void onStateChange(uint8_t state) {
   Serial.print("STATE ");
   Serial.println(stateName(state));
@@ -114,11 +136,13 @@ void onDiagnosticsCommand(const char*, const zerokernel::Kernel::EventValue& val
   }
 
   gDiagnosticsEnabled = enableDiagnostics;
+  ++gDiagToggles;
   Serial.print("DIAG mode=");
   Serial.println(enableDiagnostics ? "enabled" : "paused");
 }
 
 void maintainWiFi() {
+  ++gWiFiRuns;
   const unsigned long nowMs = millis();
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -138,11 +162,29 @@ void maintainWiFi() {
 }
 
 void sampleSensors() {
+  const unsigned long nowUs = micros();
+  if (gExpectedSampleAtUs == 0UL) {
+    gExpectedSampleAtUs = nowUs;
+  } else {
+    const unsigned long lagUs =
+        nowUs > gExpectedSampleAtUs ? (nowUs - gExpectedSampleAtUs) : 0UL;
+    gFastLagTotalUs += lagUs;
+    if (lagUs > gFastMaxLagUs) {
+      gFastMaxLagUs = lagUs;
+    }
+    if (lagUs > 2000UL) {
+      ++gFastMiss;
+    }
+  }
+
+  gExpectedSampleAtUs += 250000UL;
+  ++gSampleRuns;
   ++gSampleSequence;
   gLastSample = 200UL + ((millis() / 25UL) % 75UL);
 }
 
 void flushTelemetry() {
+  ++gTelemetryRuns;
   ZeroKernel.publishDeferredTypedFast(
       kSampleKey, zerokernel::Kernel::EventValue::fromUnsigned(gLastSample));
 }
@@ -159,8 +201,12 @@ void rotateDiagnosticsMode() {
 }
 
 void printRuntimeSummary() {
+  ++gStatsRuns;
   const zerokernel::Kernel::KernelStats stats = ZeroKernel.getStats();
   const zerokernel::Kernel::TimingReport timing = ZeroKernel.getTimingReport();
+  const unsigned long nowMs = millis();
+  const uint32_t averageLagUs =
+      gSampleRuns == 0 ? 0 : static_cast<uint32_t>(gFastLagTotalUs / gSampleRuns);
 
   Serial.print("STATS runs=");
   Serial.print(stats.taskExecutions);
@@ -174,6 +220,25 @@ void printRuntimeSummary() {
   Serial.print(timing.worstTickDurationMs);
   Serial.print(" diag=");
   Serial.println(gDiagnosticsEnabled ? "on" : "off");
+
+  Serial.print("ZEROKERNEL_TELEMETRY window_ms=");
+  Serial.print(nowMs - gSummaryStartedAtMs);
+  Serial.print(" sample_runs=");
+  Serial.print(gSampleRuns);
+  Serial.print(" telemetry_runs=");
+  Serial.print(gTelemetryRuns);
+  Serial.print(" wifi_runs=");
+  Serial.print(gWiFiRuns);
+  Serial.print(" fast_avg_lag_us=");
+  Serial.print(averageLagUs);
+  Serial.print(" fast_max_lag_us=");
+  Serial.print(gFastMaxLagUs);
+  Serial.print(" fast_miss=");
+  Serial.print(gFastMiss);
+  Serial.print(" diag_toggles=");
+  Serial.println(gDiagToggles);
+
+  resetWindow(nowMs);
 }
 
 }  // namespace
@@ -184,6 +249,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
 
   ZeroKernel.begin(zerokernel::adapters::esp32MillisClock);
+  resetWindow(millis());
   ZeroKernel.setCapabilities(zerokernel::Kernel::kCapAll);
   ZeroKernel.setSafeModeCapabilities(zerokernel::Kernel::kCapTelemetry |
                                      zerokernel::Kernel::kCapDiagnostics |

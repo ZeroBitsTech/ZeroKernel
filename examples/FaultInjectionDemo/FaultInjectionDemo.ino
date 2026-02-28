@@ -12,6 +12,13 @@ volatile unsigned long gSafeModeEnteredAtMs = 0;
 uint8_t gFaultBurstRemaining = 3;
 unsigned long gHealthCount = 0;
 bool gManualSafeModeTriggered = false;
+unsigned long gSummaryStartedAtMs = 0;
+unsigned long gExpectedHeartbeatAtUs = 0;
+uint32_t gHeartbeatRuns = 0;
+uint32_t gFaultRuns = 0;
+uint32_t gFastMiss = 0;
+uint32_t gFastMaxLagUs = 0;
+uint64_t gFastLagTotalUs = 0;
 
 const char* stateName(uint8_t state) {
   switch (state) {
@@ -53,6 +60,15 @@ const char* signalName(uint8_t signalType) {
   }
 }
 
+void resetWindow(unsigned long nowMs) {
+  gHeartbeatRuns = 0;
+  gFaultRuns = 0;
+  gFastMiss = 0;
+  gFastMaxLagUs = 0;
+  gFastLagTotalUs = 0;
+  gSummaryStartedAtMs = nowMs;
+}
+
 void onStateChange(uint8_t state) {
   Serial.print("STATE ");
   Serial.println(stateName(state));
@@ -82,11 +98,29 @@ void onFaultEvent(const char*, long value) {
 }
 
 void healthyHeartbeat() {
+  const unsigned long nowUs = micros();
+  if (gExpectedHeartbeatAtUs == 0UL) {
+    gExpectedHeartbeatAtUs = nowUs;
+  } else {
+    const unsigned long lagUs =
+        nowUs > gExpectedHeartbeatAtUs ? (nowUs - gExpectedHeartbeatAtUs) : 0UL;
+    gFastLagTotalUs += lagUs;
+    if (lagUs > gFastMaxLagUs) {
+      gFastMaxLagUs = lagUs;
+    }
+    if (lagUs > 2000UL) {
+      ++gFastMiss;
+    }
+  }
+
+  gExpectedHeartbeatAtUs += 500000UL;
+  ++gHeartbeatRuns;
   ++gHealthCount;
   ZeroKernel.publishDeferredFast(kHealthKey, static_cast<long>(gHealthCount));
 }
 
 void unstableWorker() {
+  ++gFaultRuns;
   if (gFaultBurstRemaining > 0) {
     ZeroKernel.publishDeferredFast(kFaultKey, static_cast<long>(gFaultBurstRemaining));
     --gFaultBurstRemaining;
@@ -121,6 +155,7 @@ void recoverySupervisor() {
 
 void reportRuntime() {
   const zerokernel::Kernel::KernelStats stats = ZeroKernel.getStats();
+  const unsigned long nowMs = millis();
 
   Serial.print("REPORT state=");
   Serial.print(stateName(ZeroKernel.state()));
@@ -132,6 +167,36 @@ void reportRuntime() {
   Serial.print(stats.executionOverruns);
   Serial.print(" runs=");
   Serial.println(stats.taskExecutions);
+
+  if ((nowMs - gSummaryStartedAtMs) < 5000UL) {
+    return;
+  }
+
+  const uint32_t averageLagUs =
+      gHeartbeatRuns == 0 ? 0 : static_cast<uint32_t>(gFastLagTotalUs / gHeartbeatRuns);
+
+  Serial.print("ZEROKERNEL_FAULT window_ms=");
+  Serial.print(nowMs - gSummaryStartedAtMs);
+  Serial.print(" heartbeat_runs=");
+  Serial.print(gHeartbeatRuns);
+  Serial.print(" fault_runs=");
+  Serial.print(gFaultRuns);
+  Serial.print(" fast_avg_lag_us=");
+  Serial.print(averageLagUs);
+  Serial.print(" fast_max_lag_us=");
+  Serial.print(gFastMaxLagUs);
+  Serial.print(" fast_miss=");
+  Serial.print(gFastMiss);
+  Serial.print(" failures=");
+  Serial.print(stats.taskFailures);
+  Serial.print(" recoveries=");
+  Serial.print(stats.taskRecoveries);
+  Serial.print(" overruns=");
+  Serial.print(stats.executionOverruns);
+  Serial.print(" state=");
+  Serial.println(stateName(ZeroKernel.state()));
+
+  resetWindow(nowMs);
 }
 
 }  // namespace
@@ -141,6 +206,7 @@ void setup() {
   delay(200);
 
   ZeroKernel.begin(zerokernel::adapters::arduinoMillisClock);
+  resetWindow(millis());
   ZeroKernel.setSignalHandler(onSignal);
   ZeroKernel.onStateChange(onStateChange);
   ZeroKernel.setIdleStrategy(zerokernel::Kernel::kIdleYield);
