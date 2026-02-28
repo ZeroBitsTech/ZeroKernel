@@ -6,6 +6,7 @@ namespace modules {
 namespace net {
 
 // Optional transport metrics helper. Header-only and only linked when included.
+// BETA: validated on desktop and ESP32 smoke tests, still under active tuning.
 class ZeroTransportMetrics {
  public:
   struct Snapshot {

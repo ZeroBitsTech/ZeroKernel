@@ -31,6 +31,21 @@ The intended position is simple:
 - Runtime identity, ABI version, manifest, timing reports, diagnostics hooks, and task-scoped capability gating
 - Low-level internal helpers for cycle counting and idle hints, including C and assembly where it actually helps
 
+## Repo Health
+
+The repository now ships with project-level release and validation scaffolding:
+
+- GitHub Actions CI on every push to `main` and on pull requests
+- Tag-driven release packaging on `v*` tags
+- A local `CHANGELOG.md` for release notes and regression history
+- Wiki-ready documentation pages under `docs/wiki/`
+
+Start points:
+
+- `docs/wiki/Home.md`
+- `docs/wiki/Validation.md`
+- `docs/wiki/Beta-Modules.md`
+
 ## Current Runtime Snapshot
 
 Latest measured references:
@@ -80,6 +95,17 @@ Tradeoff summary:
 - Determinism maintained: `0 lag`, `0 misses`
 
 The ESP32 tradeoff is also healthy: the footprint increase is small relative to total headroom, while the scheduling result is materially better under the same workload.
+
+## Optional Network Modules (BETA)
+
+The optional network helpers are currently marked **BETA**:
+
+- `ZeroTransportMetrics`
+- `ZeroHttpPump`
+- `ZeroMqttPump`
+- `ZeroWiFiMaintainer`
+
+They are already useful and validated on desktop plus ESP32 hardware, but they are still under active tuning for footprint, retry behavior, and cross-board transport quirks. The core runtime is the stable layer; the network helpers should be treated as add-on modules that are ready for evaluation and controlled deployments.
 
 ## Field Validation: ESP8266 Seismic Node
 
@@ -351,6 +377,11 @@ void loop() {
 
 ## Higher-Intent Demo Projects
 
+Recommended realistic network workload:
+
+- `examples/RealProjectNode`:
+  a portable node-style workload that simulates sensor sampling, WiFi link maintenance, HTTP delivery, MQTT delivery, queue pressure, and realistic intermittent transport failures.
+
 - `examples/ESP32TelemetryNode`:
   a richer ESP32 node example with WiFi maintenance, capability-gated diagnostics, heartbeat events, and periodic runtime summaries.
 - `examples/ESP32TelemetryBaseline`:
@@ -362,6 +393,7 @@ void loop() {
 
 Quick runners:
 
+- `scripts/run_esp32_real_project_demo.sh /dev/ttyUSB1`
 - `scripts/run_esp32_telemetry_demo.sh /dev/ttyUSB1`
 - `scripts/run_esp32_telemetry_compare.sh /dev/ttyUSB1`
 - `scripts/run_fault_injection_demo.sh /dev/ttyUSB0`

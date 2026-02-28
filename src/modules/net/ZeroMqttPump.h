@@ -9,6 +9,7 @@ namespace modules {
 namespace net {
 
 // Optional cooperative MQTT pump. Header-only and only linked when included.
+// BETA: suitable for evaluation, but still under active transport and retry tuning.
 class ZeroMqttPump {
  public:
   struct Message {

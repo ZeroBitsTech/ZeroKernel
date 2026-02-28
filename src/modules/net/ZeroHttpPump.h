@@ -9,6 +9,7 @@ namespace modules {
 namespace net {
 
 // Optional cooperative HTTP request pump. Header-only and only linked when included.
+// BETA: suitable for evaluation, but still under active transport and retry tuning.
 class ZeroHttpPump {
  public:
   enum StepResult : int8_t {

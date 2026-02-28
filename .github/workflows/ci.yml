@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run desktop tests
+        run: bash scripts/run_desktop_tests.sh
+
+      - name: Run lean smoke
+        run: bash scripts/run_desktop_lean_smoke.sh
+
+      - name: Run benchmark gate
+        run: bash scripts/run_desktop_benchmark.sh --enforce-performance
+
+      - name: Build desktop simulation
+        run: bash scripts/build_desktop_sim.sh

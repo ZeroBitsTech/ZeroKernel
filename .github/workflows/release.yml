@@ -1,0 +1,36 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run desktop tests
+        run: bash scripts/run_desktop_tests.sh
+
+      - name: Run benchmark gate
+        run: bash scripts/run_desktop_benchmark.sh --enforce-performance
+
+      - name: Package source
+        run: |
+          mkdir -p dist
+          git archive --format=tar.gz --output=dist/zerokernel-${GITHUB_REF_NAME}.tar.gz HEAD
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/zerokernel-${{ github.ref_name }}.tar.gz
+            zerokernel.manifest.json
+            CHANGELOG.md
