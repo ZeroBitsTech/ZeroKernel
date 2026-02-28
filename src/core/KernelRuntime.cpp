@@ -25,8 +25,10 @@ Kernel::Kernel()
       traceTail_(0),
       traceCount_(0),
       eventFlags_(0),
+#if ZEROKERNEL_ENABLE_CAPABILITIES
       capabilityMask_(kCapAll),
       safeModeCapabilityMask_(kCapAll),
+#endif
       kernelState_(kStateBoot),
       safeMode_(false),
       safeModePriorityFloor_(kPriorityHigh),

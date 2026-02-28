@@ -35,9 +35,11 @@ The intended position is simple:
 
 Latest measured references:
 
-- ESP8266 `POWER_SAVE` (`UniversalSmokeTest`): `28864 / 80192` RAM, `241140 / 1048576` flash
-- Wemos compare runtime overhead vs blocking baseline: `+744 bytes` RAM, `+3344 bytes` flash
+- ESP8266 `POWER_SAVE` (`UniversalSmokeTest`): `28864 / 80192` RAM, `241156 / 1048576` flash
+- Wemos compare runtime overhead vs blocking baseline: `+744 bytes` RAM, `+3360 bytes` flash
 - Wemos determinism gate: `fast_avg_lag_us=0`, `fast_max_lag_us=0`, `fast_miss=0`
+- ESP32 compare runtime overhead vs blocking baseline: `+704 bytes` RAM, `+4588 bytes` flash
+- ESP32 determinism gate: `fast_avg_lag_us=0`, `fast_max_lag_us=0`, `fast_miss=0`
 - Wemos measured free heap during diagnostics: `49280`
 
 These are regression references, not marketing numbers. The most important gate is still deterministic timing.
@@ -49,19 +51,39 @@ Measured on Wemos D1 mini using the blocking baseline and the current ZeroKernel
 | Metric | Before (blocking) | After (ZeroKernel) |
 | --- | ---: | ---: |
 | RAM usage | `28300 / 80192` | `29044 / 80192` |
-| Flash usage | `237092 / 1048576` | `240436 / 1048576` |
-| Fast avg lag | `2916 us` | `0 us` |
-| Fast max lag | `12112 us` | `0 us` |
+| Flash usage | `237092 / 1048576` | `240452 / 1048576` |
+| Fast avg lag | `2512 us` | `0 us` |
+| Fast max lag | `11054 us` | `0 us` |
 | Fast misses | `126` | `0` |
 
 Tradeoff summary:
 
 - RAM overhead: `+744 bytes`
-- Flash overhead: `+3344 bytes`
+- Flash overhead: `+3360 bytes`
 - Determinism maintained: `0 lag`, `0 misses`
 - Measured free heap on Wemos diagnostics: `49280`
 
 That overhead buys bounded scheduling, watchdog supervision, panic flow, capability-aware task gating, and fixed-capacity queues. On ESP8266-class hardware the measured free heap remains comfortably high, so the extra runtime footprint is a small and controlled tradeoff rather than a practical memory risk.
+
+## ESP32 Before vs After
+
+Measured on ESP32 using the blocking baseline and the current ZeroKernel compare sketch:
+
+| Metric | Before (blocking) | After (ZeroKernel) |
+| --- | ---: | ---: |
+| RAM usage | `22116 / 327680` | `22820 / 327680` |
+| Flash usage | `280368 / 1310720` | `284956 / 1310720` |
+| Fast avg lag | `2022 us` | `0 us` |
+| Fast max lag | `8156 us` | `0 us` |
+| Fast misses | `124` | `0` |
+
+Tradeoff summary:
+
+- RAM overhead: `+704 bytes`
+- Flash overhead: `+4588 bytes`
+- Determinism maintained: `0 lag`, `0 misses`
+
+The ESP32 tradeoff is also healthy: the footprint increase is small relative to total headroom, while the scheduling result is materially better under the same workload.
 
 ## Install
 
@@ -229,6 +251,7 @@ ZeroKernel already includes local and hardware validation:
 - Desktop benchmark with optional performance gate
 - Cross-target compile and resource matrix with budget gates
 - Wemos before/after compare with determinism gate
+- ESP32 before/after compare with determinism gate
 - Wemos diagnostics and level-2 stress with automatic firmware restore
 
 Main scripts:
@@ -238,6 +261,7 @@ Main scripts:
 - `scripts/run_desktop_benchmark.sh --enforce-performance`
 - `scripts/run_resource_matrix.sh --enforce-budget`
 - `scripts/run_wemos_compare.sh /dev/ttyUSB0 --enforce-determinism`
+- `scripts/run_esp32_compare.sh /dev/ttyUSB1`
 - `scripts/run_full_audit.sh /dev/ttyUSB0`
 
 ## Build Profiles
@@ -258,6 +282,9 @@ Important lean-build switches:
 - `ZEROKERNEL_ENABLE_TOPIC_KEY_ONLY`
 - `ZEROKERNEL_ENABLE_EXTENDED_TASK_METRICS`
 - `ZEROKERNEL_ENABLE_DIAGNOSTICS`
+- `ZEROKERNEL_ENABLE_CAPABILITIES`
+
+`ZEROKERNEL_ENABLE_CAPABILITIES` stays enabled in full profiles and is compiled out in `POWER_SAVE` and `MINIMAL_RUNTIME`, so lean targets do not pay extra static RAM for capability state.
 - `ZEROKERNEL_ENABLE_DEBUG_DUMP`
 
 For small builds, the goal is to preserve the public API while collapsing runtime cost toward key-based routing and stripped diagnostics.

@@ -162,7 +162,11 @@ bool Kernel::getTaskStats(const char* name, TaskStats& outStats) const {
   outStats.failureBudget = slot.failureBudget;
   outStats.panicMode = slot.panicMode;
   outStats.safeModePriorityFloor = slot.safeModePriorityFloor;
+#if ZEROKERNEL_ENABLE_CAPABILITIES
   outStats.requiredCapabilities = slot.requiredCapabilities;
+#else
+  outStats.requiredCapabilities = kCapNone;
+#endif
   outStats.state = slot.state;
   return true;
 }
@@ -209,7 +213,11 @@ uint8_t Kernel::snapshotTasks(TaskStats* buffer, uint8_t capacity) const {
     outStats.failureBudget = tasks_[i].failureBudget;
     outStats.panicMode = tasks_[i].panicMode;
     outStats.safeModePriorityFloor = tasks_[i].safeModePriorityFloor;
+#if ZEROKERNEL_ENABLE_CAPABILITIES
     outStats.requiredCapabilities = tasks_[i].requiredCapabilities;
+#else
+    outStats.requiredCapabilities = kCapNone;
+#endif
     outStats.state = tasks_[i].state;
     ++count;
   }

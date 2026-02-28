@@ -11,27 +11,51 @@ uint8_t Kernel::getIdleStrategy() const {
 }
 
 void Kernel::setCapabilities(CapabilityMask capabilities) {
+#if ZEROKERNEL_ENABLE_CAPABILITIES
   capabilityMask_ = capabilities;
+#else
+  (void)capabilities;
+#endif
 }
 
 Kernel::CapabilityMask Kernel::capabilities() const {
+#if ZEROKERNEL_ENABLE_CAPABILITIES
   return capabilityMask_;
+#else
+  return kCapAll;
+#endif
 }
 
 void Kernel::enableCapabilities(CapabilityMask capabilities) {
+#if ZEROKERNEL_ENABLE_CAPABILITIES
   capabilityMask_ |= capabilities;
+#else
+  (void)capabilities;
+#endif
 }
 
 void Kernel::disableCapabilities(CapabilityMask capabilities) {
+#if ZEROKERNEL_ENABLE_CAPABILITIES
   capabilityMask_ &= ~capabilities;
+#else
+  (void)capabilities;
+#endif
 }
 
 void Kernel::setSafeModeCapabilities(CapabilityMask capabilities) {
+#if ZEROKERNEL_ENABLE_CAPABILITIES
   safeModeCapabilityMask_ = capabilities;
+#else
+  (void)capabilities;
+#endif
 }
 
 Kernel::CapabilityMask Kernel::safeModeCapabilities() const {
+#if ZEROKERNEL_ENABLE_CAPABILITIES
   return safeModeCapabilityMask_;
+#else
+  return kCapAll;
+#endif
 }
 
 void Kernel::onStateChange(StateChangeHandler handler) {
@@ -148,7 +172,11 @@ void Kernel::initializeTaskSlot_(TaskSlot& slot,
   slot.failureBudget = config.contract.failureBudget;
   slot.panicMode = config.contract.panicMode;
   slot.safeModePriorityFloor = config.contract.safeModePriorityFloor;
+#if ZEROKERNEL_ENABLE_CAPABILITIES
   slot.requiredCapabilities = config.requiredCapabilities;
+#else
+  (void)config;
+#endif
 #if ZEROKERNEL_ENABLE_EXTENDED_TASK_METRICS
   slot.lastLagMs = 0;
   slot.maxLagMs = 0;
@@ -332,6 +360,10 @@ void Kernel::setKernelState_(uint8_t nextState) {
 }
 
 bool Kernel::hasTaskCapabilities_(const TaskSlot& slot) const {
+#if !ZEROKERNEL_ENABLE_CAPABILITIES
+  (void)slot;
+  return true;
+#else
   if (!slot.inUse) {
     return false;
   }
@@ -346,6 +378,7 @@ bool Kernel::hasTaskCapabilities_(const TaskSlot& slot) const {
   }
 
   return (slot.requiredCapabilities & activeCapabilities) == slot.requiredCapabilities;
+#endif
 }
 
 }  // namespace zerokernel

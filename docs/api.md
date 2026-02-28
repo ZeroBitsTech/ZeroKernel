@@ -191,3 +191,5 @@ Key counters exposed by `KernelStats`:
 - `queuedWorkDropped`
 
 `TaskStats.requiredCapabilities` reports the task capability mask exactly as registered.
+
+When `ZEROKERNEL_ENABLE_CAPABILITIES` is disabled, capability APIs remain available for source compatibility but the runtime treats all capabilities as enabled and task scheduling ignores capability masks.

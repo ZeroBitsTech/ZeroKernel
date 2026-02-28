@@ -423,7 +423,9 @@ class Kernel {
 #endif
     uint32_t runCount;
     uint16_t maxRuntimeUs;
+#if ZEROKERNEL_ENABLE_CAPABILITIES
     CapabilityMask requiredCapabilities;
+#endif
     uint16_t failureCount;
     uint8_t priority;
     uint8_t contractFlags;
@@ -542,8 +544,10 @@ class Kernel {
   uint8_t traceTail_;
   uint8_t traceCount_;
   volatile EventFlags eventFlags_;
+#if ZEROKERNEL_ENABLE_CAPABILITIES
   CapabilityMask capabilityMask_;
   CapabilityMask safeModeCapabilityMask_;
+#endif
   uint8_t kernelState_;
   bool safeMode_;
   uint8_t safeModePriorityFloor_;
