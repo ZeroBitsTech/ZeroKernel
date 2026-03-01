@@ -37,6 +37,7 @@ class ZeroMqttPump {
     unsigned long retryBaseMs;
     unsigned long retryMaxMs;
     unsigned long retryJitterMs;
+    unsigned long idleLoopIntervalMs;
     uint8_t maxRetries;
     bool dropOldestOnFull;
     Kernel::TopicKey stateTopicKey;
@@ -46,6 +47,7 @@ class ZeroMqttPump {
           retryBaseMs(500),
           retryMaxMs(5000),
           retryJitterMs(0),
+          idleLoopIntervalMs(0),
           maxRetries(2),
           dropOldestOnFull(true),
           stateTopicKey(0) {}
@@ -68,6 +70,7 @@ class ZeroMqttPump {
         connected_(false),
         lastObservedConnected_(false),
         lastTickAtMs_(0),
+        lastLoopAtMs_(0),
         queueCount_(0),
         pendingRetryAtMs_(0),
         currentRetryMs_(0),
@@ -99,6 +102,7 @@ class ZeroMqttPump {
     connected_ = false;
     lastObservedConnected_ = false;
     lastTickAtMs_ = 0;
+    lastLoopAtMs_ = 0;
     queueCount_ = 0;
     pendingRetryAtMs_ = 0;
     currentRetryMs_ = config_.retryBaseMs;
@@ -174,8 +178,15 @@ class ZeroMqttPump {
     }
 
     if (loopStep_ != NULL) {
-      loopStep_(context_);
-      metrics_.recordLoopCall();
+      const bool idleThrottled = queueCount_ == 0 &&
+                                 config_.idleLoopIntervalMs > 0 &&
+                                 lastLoopAtMs_ != 0 &&
+                                 (nowMs - lastLoopAtMs_) < config_.idleLoopIntervalMs;
+      if (!idleThrottled) {
+        loopStep_(context_);
+        lastLoopAtMs_ = nowMs;
+        metrics_.recordLoopCall();
+      }
     }
 
     if (pendingRetryAtMs_ != 0 && nowMs < pendingRetryAtMs_) {
@@ -277,6 +288,7 @@ class ZeroMqttPump {
   bool connected_;
   bool lastObservedConnected_;
   unsigned long lastTickAtMs_;
+  unsigned long lastLoopAtMs_;
   Message queue_[kQueueCapacity];
   uint8_t queueCount_;
   unsigned long pendingRetryAtMs_;

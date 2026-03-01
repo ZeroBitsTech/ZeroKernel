@@ -29,6 +29,7 @@ class ZeroTransportMetrics {
     unsigned long lastQueueDwellMs;
     unsigned long worstQueueDwellMs;
     unsigned long maxQueueDepth;
+    unsigned long phaseTimeouts;
   };
 
   ZeroTransportMetrics() {
@@ -47,6 +48,7 @@ class ZeroTransportMetrics {
     backoffSchedules_ = 0;
     consecutiveFailures_ = 0;
     maxQueueDepth_ = 0;
+    phaseTimeouts_ = 0;
 
 #if ZEROKERNEL_ENABLE_NET_EXTENDED_METRICS
     lastConnectLatencyMs_ = 0;
@@ -131,6 +133,10 @@ class ZeroTransportMetrics {
     increment16_(backoffSchedules_);
   }
 
+  void recordPhaseTimeout() {
+    increment16_(phaseTimeouts_);
+  }
+
   Snapshot snapshot() const {
     Snapshot snapshot;
     snapshot.connectAttempts = connectAttempts_;
@@ -144,6 +150,7 @@ class ZeroTransportMetrics {
     snapshot.backoffSchedules = backoffSchedules_;
     snapshot.consecutiveFailures = consecutiveFailures_;
     snapshot.maxQueueDepth = maxQueueDepth_;
+    snapshot.phaseTimeouts = phaseTimeouts_;
 
 #if ZEROKERNEL_ENABLE_NET_EXTENDED_METRICS
     snapshot.lastConnectLatencyMs = lastConnectLatencyMs_;
@@ -189,6 +196,7 @@ class ZeroTransportMetrics {
   uint16_t backoffSchedules_;
   uint16_t consecutiveFailures_;
   uint8_t maxQueueDepth_;
+  uint16_t phaseTimeouts_;
 
 #if ZEROKERNEL_ENABLE_NET_EXTENDED_METRICS
   unsigned long lastConnectLatencyMs_;

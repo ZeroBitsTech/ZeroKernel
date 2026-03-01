@@ -317,8 +317,8 @@ void reportTask() {
            "LIVE_NETMODULES window_ms=%lu sample_runs=%lu fast_avg_lag_us=%lu "
            "fast_max_lag_us=%lu fast_miss=%lu wifi_attempts=%lu wifi_reconnects=%lu "
            "http_connect_ok=%lu http_connect_fail=%lu http_ok=%lu http_fail=%lu "
-           "http_rate=%lu mqtt_connect_ok=%lu mqtt_connect_fail=%lu mqtt_ok=%lu "
-           "mqtt_fail=%lu mqtt_rate=%lu http_queue=%u mqtt_queue=%u",
+           "http_rate=%lu http_phase_to=%lu mqtt_connect_ok=%lu mqtt_connect_fail=%lu "
+           "mqtt_ok=%lu mqtt_fail=%lu mqtt_rate=%lu http_queue=%u mqtt_queue=%u",
            nowMs - g_startedAtMs,
            g_sampleRuns,
            avgLagUs,
@@ -331,6 +331,7 @@ void reportTask() {
            httpMetrics.sendSuccesses,
            httpMetrics.sendFailures,
            percentage(httpMetrics.sendSuccesses, httpMetrics.sendFailures),
+           httpMetrics.phaseTimeouts,
            mqttMetrics.connectSuccesses,
            mqttMetrics.connectFailures,
            mqttMetrics.sendSuccesses,
@@ -380,6 +381,8 @@ void setup() {
   wifiConfig.retryMaxMs = 10000;
   wifiConfig.retryJitterMs = 300;
 #endif
+  wifiConfig.stablePollMultiplier = 4;
+  wifiConfig.stableThreshold = 6;
   wifiConfig.manageCapabilities = true;
   wifiConfig.capabilityMask = Kernel::kCapNetwork;
   wifiConfig.stateTopicKey = kWiFiStateTopic;
@@ -391,6 +394,11 @@ void setup() {
   httpConfig.retryMaxMs = 3000;
   httpConfig.retryJitterMs = 150;
   httpConfig.maxRetries = 2;
+#if defined(ARDUINO_ARCH_ESP8266)
+  httpConfig.phaseTimeoutMs = 300;
+#else
+  httpConfig.phaseTimeoutMs = 600;
+#endif
   g_httpPump.begin(ZeroKernel,
                    httpConnectStep,
                    httpWriteStep,
@@ -404,6 +412,7 @@ void setup() {
   mqttConfig.retryMaxMs = 3000;
   mqttConfig.retryJitterMs = 200;
   mqttConfig.maxRetries = 2;
+  mqttConfig.idleLoopIntervalMs = 250;
   mqttConfig.stateTopicKey = kMqttStateTopic;
   g_mqttPump.begin(ZeroKernel,
                    mqttLinkProbe,

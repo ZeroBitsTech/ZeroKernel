@@ -52,6 +52,7 @@ class ZeroHttpPump {
     unsigned long retryBaseMs;
     unsigned long retryMaxMs;
     unsigned long retryJitterMs;
+    unsigned long phaseTimeoutMs;
     uint8_t maxRetries;
     bool dropOldestOnFull;
     bool emitCompletionEvents;
@@ -61,6 +62,7 @@ class ZeroHttpPump {
           retryBaseMs(250),
           retryMaxMs(2000),
           retryJitterMs(0),
+          phaseTimeoutMs(0),
           maxRetries(2),
           dropOldestOnFull(true),
           emitCompletionEvents(true) {}
@@ -179,6 +181,13 @@ class ZeroHttpPump {
       }
 
       if (phase_ == kPhaseConnecting && nextRetryAtMs_ != 0 && nowMs < nextRetryAtMs_) {
+        return;
+      }
+
+      if (config_.phaseTimeoutMs > 0 && phaseStartedAtMs_ != 0 &&
+          (nowMs - phaseStartedAtMs_) > config_.phaseTimeoutMs) {
+        metrics_.recordPhaseTimeout();
+        handlePhaseFailure_(nowMs);
         return;
       }
 

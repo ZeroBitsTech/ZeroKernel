@@ -21,6 +21,8 @@ class ZeroWiFiMaintainer {
     unsigned long retryBaseMs;
     unsigned long retryMaxMs;
     unsigned long retryJitterMs;
+    uint8_t stablePollMultiplier;
+    uint8_t stableThreshold;
     bool emitStateChangesOnly;
     bool manageCapabilities;
     Kernel::CapabilityMask capabilityMask;
@@ -31,6 +33,8 @@ class ZeroWiFiMaintainer {
           retryBaseMs(1000),
           retryMaxMs(10000),
           retryJitterMs(0),
+          stablePollMultiplier(1),
+          stableThreshold(4),
           emitStateChangesOnly(true),
           manageCapabilities(false),
           capabilityMask(Kernel::kCapNetwork),
@@ -53,7 +57,8 @@ class ZeroWiFiMaintainer {
         currentRetryMs_(0),
         connectAttempts_(0),
         reconnectTransitions_(0),
-        stateNotifications_(0) {}
+        stateNotifications_(0),
+        consecutiveStablePolls_(0) {}
 
   void begin(Kernel& kernel,
              LinkProbe probe,
@@ -90,6 +95,7 @@ class ZeroWiFiMaintainer {
     connectAttempts_ = 0;
     reconnectTransitions_ = 0;
     stateNotifications_ = 0;
+    consecutiveStablePolls_ = 0;
   }
 
   void tick() {
@@ -98,7 +104,12 @@ class ZeroWiFiMaintainer {
     }
 
     const unsigned long nowMs = kernel_->getStats().uptimeMs;
-    if (hasPolled_ && (nowMs - lastPollAtMs_) < config_.pollIntervalMs) {
+    unsigned long effectivePollMs = config_.pollIntervalMs;
+    if (config_.stablePollMultiplier > 1 &&
+        consecutiveStablePolls_ >= config_.stableThreshold) {
+      effectivePollMs *= config_.stablePollMultiplier;
+    }
+    if (hasPolled_ && (nowMs - lastPollAtMs_) < effectivePollMs) {
       return;
     }
 
@@ -109,6 +120,9 @@ class ZeroWiFiMaintainer {
     if (linkUp) {
       if (!connected_) {
         ++reconnectTransitions_;
+        consecutiveStablePolls_ = 0;
+      } else if (consecutiveStablePolls_ < 255) {
+        ++consecutiveStablePolls_;
       }
       connected_ = true;
       currentRetryMs_ = config_.retryBaseMs;
@@ -120,6 +134,7 @@ class ZeroWiFiMaintainer {
 
     if (connected_) {
       connected_ = false;
+      consecutiveStablePolls_ = 0;
       if (disconnectStep_ != NULL) {
         disconnectStep_();
       }
@@ -221,6 +236,7 @@ class ZeroWiFiMaintainer {
   unsigned long connectAttempts_;
   unsigned long reconnectTransitions_;
   unsigned long stateNotifications_;
+  uint8_t consecutiveStablePolls_;
 };
 
 }  // namespace net
