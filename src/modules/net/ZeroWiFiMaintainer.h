@@ -31,9 +31,9 @@ class ZeroWiFiMaintainer {
     Config()
         : pollIntervalMs(500),
 #if defined(ARDUINO_ARCH_ESP8266)
-          retryBaseMs(3000),
-          retryMaxMs(15000),
-          retryJitterMs(500),
+          retryBaseMs(2000),
+          retryMaxMs(12000),
+          retryJitterMs(350),
 #else
           retryBaseMs(1000),
           retryMaxMs(10000),

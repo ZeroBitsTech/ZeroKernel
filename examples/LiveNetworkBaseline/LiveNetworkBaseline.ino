@@ -16,6 +16,10 @@ namespace {
 WiFiClient g_httpClient;
 WiFiClient g_mqttTransport;
 PubSubClient g_mqttClient(g_mqttTransport);
+IPAddress g_httpAddress;
+IPAddress g_mqttAddress;
+bool g_httpAddressValid = false;
+bool g_mqttAddressValid = false;
 
 const unsigned long kSamplePeriodUs = 100000UL;
 const unsigned long kDispatchPeriodMs = 500UL;
@@ -90,7 +94,9 @@ void ensureWiFi() {
   }
 
 #if defined(ARDUINO_ARCH_ESP8266)
-  if (WiFi.status() == WL_DISCONNECTED) {
+  if (WiFi.status() == WL_DISCONNECTED || WiFi.status() == WL_IDLE_STATUS ||
+      WiFi.status() == WL_NO_SSID_AVAIL || WiFi.status() == WL_CONNECT_FAILED ||
+      WiFi.status() == WL_CONNECTION_LOST) {
     WiFi.begin(kWiFiSsid, kWiFiPassword);
   }
 #else
@@ -138,7 +144,9 @@ bool sendHttpNow(const char* body, size_t length) {
 
   g_httpClient.stop();
   g_httpClient.setTimeout(kHttpTimeoutMs);
-  if (!g_httpClient.connect(kHttpHost, kHttpPort)) {
+  const bool connected = g_httpAddressValid ? g_httpClient.connect(g_httpAddress, kHttpPort)
+                                            : g_httpClient.connect(kHttpHost, kHttpPort);
+  if (!connected) {
     g_httpClient.stop();
     return false;
   }
@@ -298,7 +306,13 @@ void setup() {
   WiFi.persistent(false);
 #endif
 
-  g_mqttClient.setServer(kMqttHost, kMqttPort);
+  g_httpAddressValid = g_httpAddress.fromString(kHttpHost);
+  g_mqttAddressValid = g_mqttAddress.fromString(kMqttHost);
+  if (g_mqttAddressValid) {
+    g_mqttClient.setServer(g_mqttAddress, kMqttPort);
+  } else {
+    g_mqttClient.setServer(kMqttHost, kMqttPort);
+  }
   g_startedAtMs = millis();
 }
 

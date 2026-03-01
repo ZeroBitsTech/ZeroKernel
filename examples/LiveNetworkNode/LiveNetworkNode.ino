@@ -50,6 +50,10 @@ const Kernel::TopicKey kTelemetryTopic = Kernel::makeTopicKey("live.telemetry");
 WiFiClient g_httpClient;
 WiFiClient g_mqttTransport;
 PubSubClient g_mqttClient(g_mqttTransport);
+IPAddress g_httpAddress;
+IPAddress g_mqttAddress;
+bool g_httpAddressValid = false;
+bool g_mqttAddressValid = false;
 
 ZeroWiFiMaintainer g_wifiMaintainer;
 ZeroHttpPump g_httpPump;
@@ -111,7 +115,9 @@ void disconnectWiFi() {
 ZeroHttpPump::StepResult httpConnectStep(const ZeroHttpPump::Request&, void*) {
   g_httpClient.stop();
   g_httpClient.setTimeout(kHttpIoTimeoutMs);
-  if (!g_httpClient.connect(kHttpHost, kHttpPort)) {
+  const bool connected = g_httpAddressValid ? g_httpClient.connect(g_httpAddress, kHttpPort)
+                                            : g_httpClient.connect(kHttpHost, kHttpPort);
+  if (!connected) {
     return ZeroHttpPump::kStepFailed;
   }
   g_httpRequestPrepared = false;
@@ -361,7 +367,13 @@ void setup() {
   WiFi.persistent(false);
 #endif
 
-  g_mqttClient.setServer(kMqttHost, kMqttPort);
+  g_httpAddressValid = g_httpAddress.fromString(kHttpHost);
+  g_mqttAddressValid = g_mqttAddress.fromString(kMqttHost);
+  if (g_mqttAddressValid) {
+    g_mqttClient.setServer(g_mqttAddress, kMqttPort);
+  } else {
+    g_mqttClient.setServer(kMqttHost, kMqttPort);
+  }
   g_mqttClient.setSocketTimeout(1);
   g_mqttClient.setKeepAlive(15);
   g_httpClient.setNoDelay(true);
