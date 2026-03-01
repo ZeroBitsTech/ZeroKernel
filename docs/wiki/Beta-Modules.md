@@ -6,6 +6,7 @@ The following optional modules are currently marked **BETA**:
 - `ZeroHttpPump`
 - `ZeroMqttPump`
 - `ZeroTransportMetrics`
+- `ZeroNetProfileEsp8266`
 
 They are already useful and validated on desktop plus ESP32 smoke tests, but they are not yet considered fully field-proven across all transport stacks and all board families.
 
@@ -14,6 +15,10 @@ They are already useful and validated on desktop plus ESP32 smoke tests, but the
 - **ESP32:** the current network stack is stable enough for production-style evaluation and controlled deployments when you validate against your real server or broker.
 - **ESP8266 / Wemos:** still BETA. Live transport works, but timing cost is still under active hardening.
 - **Other targets:** compile-supported, but network helpers should still be treated as validation targets until they see the same live-network coverage.
+
+Recommended default:
+
+- For constrained ESP8266 boards, start with `ZeroNetProfileEsp8266`. It is a BETA, MQTT-first constrained preset that keeps HTTP degraded by default and rejects offline queueing so the board stays more predictable without hand-tuning every interval.
 
 ## What BETA Means Here
 

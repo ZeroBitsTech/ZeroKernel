@@ -41,6 +41,7 @@ class ZeroMqttPump {
     unsigned long idleLoopIntervalMs;
     uint8_t maxRetries;
     bool dropOldestOnFull;
+    bool queueWhenTransportDown;
     Kernel::TopicKey stateTopicKey;
 
     Config()
@@ -51,6 +52,7 @@ class ZeroMqttPump {
           idleLoopIntervalMs(250),
           maxRetries(2),
           dropOldestOnFull(true),
+          queueWhenTransportDown(true),
           stateTopicKey(0) {}
   };
 
@@ -119,6 +121,15 @@ class ZeroMqttPump {
                uint8_t retriesRemaining = 0) {
     if (kernel_ == NULL) {
       return false;
+    }
+
+    if (!config_.queueWhenTransportDown) {
+      const bool transportReady = transportProbe_ != NULL ? transportProbe_()
+                                                          : (connected_ || (linkProbe_ != NULL && linkProbe_()));
+      if (!transportReady) {
+        metrics_.recordQueueDrop();
+        return false;
+      }
     }
 
     Message message;

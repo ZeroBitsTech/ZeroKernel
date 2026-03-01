@@ -8,6 +8,8 @@
 
 ## Unreleased
 
+- Added `ZeroNetProfileEsp8266`, a constrained MQTT-first preset for Wemos / ESP8266.
+- Added optional offline queue gating in `ZeroHttpPump` and `ZeroMqttPump` so constrained boards can refuse backlog when link or transport is down.
 - Added generic compare workloads for `EnvMonitor`, `TelemetryGateway`, and `IndustrialLoop`.
 - Added repeatable ESP32 compare runners plus a cross-target workload compile matrix.
 - Improved telemetry gateway tuning so module throughput rises without queue buildup.

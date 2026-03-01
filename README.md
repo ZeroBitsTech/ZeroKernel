@@ -104,6 +104,7 @@ The optional network helpers are currently marked **BETA**:
 - `ZeroHttpPump`
 - `ZeroMqttPump`
 - `ZeroWiFiMaintainer`
+- `ZeroNetProfileEsp8266` (recommended constrained starting point for Wemos / ESP8266)
 
 They are already useful and validated on desktop plus ESP32 hardware, but they are still under active tuning for footprint, retry behavior, and cross-board transport quirks. The core runtime is the stable layer; the network helpers should be treated as add-on modules that are ready for evaluation and controlled deployments.
 
@@ -112,6 +113,11 @@ Current target maturity:
 - **ESP32:** stable enough for production-style evaluation and controlled deployments when validated against the real HTTP/MQTT endpoint you intend to ship with.
 - **ESP8266 / Wemos:** still BETA. Live delivery is real, but timing cost is still under active hardening.
 - **Other supported families:** compile-validated, but network helper maturity should still be treated as evaluation-grade until they receive the same live validation depth.
+
+Recommended board-specific path:
+
+- **ESP32:** use the default network module configs first, then validate against your real endpoint.
+- **ESP8266 / Wemos:** start with `ZeroNetProfileEsp8266`. It is a BETA, MQTT-first constrained preset that disables periodic HTTP dispatch by default and prevents offline queue buildup so constrained boards do not need heavy manual tuning just to stay responsive.
 
 Current best module tradeoff reference (ESP32, `LEAN_NET`, manual pattern vs module pattern):
 

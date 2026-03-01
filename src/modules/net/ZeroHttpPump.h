@@ -57,6 +57,7 @@ class ZeroHttpPump {
     unsigned long phaseTimeoutMs;
     uint8_t maxRetries;
     bool dropOldestOnFull;
+    bool queueWhenLinkDown;
     bool emitCompletionEvents;
 
     Config()
@@ -79,6 +80,7 @@ class ZeroHttpPump {
 #endif
           maxRetries(2),
           dropOldestOnFull(true),
+          queueWhenLinkDown(true),
           emitCompletionEvents(true) {}
   };
 
@@ -148,6 +150,11 @@ class ZeroHttpPump {
 
   bool enqueue(const Request& request) {
     if (kernel_ == NULL) {
+      return false;
+    }
+
+    if (!config_.queueWhenLinkDown && linkProbe_ != NULL && !linkProbe_()) {
+      metrics_.recordQueueDrop();
       return false;
     }
 
