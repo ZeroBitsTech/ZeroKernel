@@ -3,6 +3,7 @@
 #include <modules/net/ZeroHttpPump.h>
 #include <modules/net/ZeroMqttPump.h>
 #include <modules/net/ZeroNetProfileEsp8266.h>
+#include <modules/net/ZeroNetProfileEsp8266Http.h>
 #include <modules/net/ZeroWiFiMaintainer.h>
 
 #if defined(ARDUINO_ARCH_ESP8266)
@@ -20,6 +21,7 @@ using zerokernel::Kernel;
 using zerokernel::modules::net::ZeroHttpPump;
 using zerokernel::modules::net::ZeroMqttPump;
 using zerokernel::modules::net::ZeroNetProfileEsp8266;
+using zerokernel::modules::net::ZeroNetProfileEsp8266Http;
 using zerokernel::modules::net::ZeroTransportMetrics;
 using zerokernel::modules::net::ZeroWiFiMaintainer;
 
@@ -27,14 +29,21 @@ namespace {
 
 const unsigned long kSamplePeriodUs = 100000UL;
 #if defined(ARDUINO_ARCH_ESP8266)
-const unsigned long kSampleTaskIntervalMs = ZeroNetProfileEsp8266::kSampleTaskIntervalMs;
-const bool kEnableHttpByDefault = ZeroNetProfileEsp8266::kEnableHttpByDefault;
-const unsigned long kHttpDispatchPeriodMs = ZeroNetProfileEsp8266::kHttpDispatchPeriodMs;
-const unsigned long kMqttDispatchPeriodMs = ZeroNetProfileEsp8266::kMqttDispatchPeriodMs;
-const unsigned long kHttpIoTimeoutMs = ZeroNetProfileEsp8266::kHttpIoTimeoutMs;
+#if defined(ZEROKERNEL_LIVE_ESP8266_HTTP_FIRST)
+typedef ZeroNetProfileEsp8266Http ZeroNetActiveEsp8266Profile;
+#else
+typedef ZeroNetProfileEsp8266 ZeroNetActiveEsp8266Profile;
+#endif
+const unsigned long kSampleTaskIntervalMs = ZeroNetActiveEsp8266Profile::kSampleTaskIntervalMs;
+const bool kEnableHttpByDefault = ZeroNetActiveEsp8266Profile::kEnableHttpByDefault;
+const bool kEnableMqttByDefault = ZeroNetActiveEsp8266Profile::kEnableMqttByDefault;
+const unsigned long kHttpDispatchPeriodMs = ZeroNetActiveEsp8266Profile::kHttpDispatchPeriodMs;
+const unsigned long kMqttDispatchPeriodMs = ZeroNetActiveEsp8266Profile::kMqttDispatchPeriodMs;
+const unsigned long kHttpIoTimeoutMs = ZeroNetActiveEsp8266Profile::kHttpIoTimeoutMs;
 #else
 const unsigned long kSampleTaskIntervalMs = 1UL;
 const bool kEnableHttpByDefault = true;
+const bool kEnableMqttByDefault = true;
 const unsigned long kHttpDispatchPeriodMs = 500UL;
 const unsigned long kMqttDispatchPeriodMs = 500UL;
 const unsigned long kHttpIoTimeoutMs = 500UL;
@@ -305,7 +314,7 @@ void dispatchTask() {
     }
   }
 
-  if (mqttDue) {
+  if (kEnableMqttByDefault && mqttDue) {
     g_lastMqttDispatchAtMs = nowMs;
     if (g_mqttPump.queuedCount() < ZeroMqttPump::kQueueCapacity) {
       g_mqttPump.enqueue(kTelemetryTopic, Kernel::EventValue::fromUnsigned(g_sensorValue), 1);
@@ -404,7 +413,7 @@ void setup() {
 
   ZeroKernel.begin(boardMillis);
 #if defined(ARDUINO_ARCH_ESP8266)
-  ZeroKernel.setIdleStrategy(ZeroNetProfileEsp8266::kRecommendedIdleStrategy);
+  ZeroKernel.setIdleStrategy(ZeroNetActiveEsp8266Profile::kRecommendedIdleStrategy);
 #else
   ZeroKernel.setIdleStrategy(Kernel::kIdleSleep);
 #endif
@@ -413,7 +422,7 @@ void setup() {
 
   ZeroWiFiMaintainer::Config wifiConfig;
 #if defined(ARDUINO_ARCH_ESP8266)
-  wifiConfig = ZeroNetProfileEsp8266::wifiConfig();
+  wifiConfig = ZeroNetActiveEsp8266Profile::wifiConfig();
 #endif
   wifiConfig.manageCapabilities = true;
   wifiConfig.capabilityMask = Kernel::kCapNetwork;
@@ -422,7 +431,7 @@ void setup() {
 
   ZeroHttpPump::Config httpConfig;
 #if defined(ARDUINO_ARCH_ESP8266)
-  httpConfig = ZeroNetProfileEsp8266::httpConfig();
+  httpConfig = ZeroNetActiveEsp8266Profile::httpConfig();
 #endif
   if (kEnableHttpByDefault) {
     g_httpPump.begin(ZeroKernel,
@@ -436,29 +445,33 @@ void setup() {
 
   ZeroMqttPump::Config mqttConfig;
 #if defined(ARDUINO_ARCH_ESP8266)
-  mqttConfig = ZeroNetProfileEsp8266::mqttConfig();
+  mqttConfig = ZeroNetActiveEsp8266Profile::mqttConfig();
 #endif
-  mqttConfig.stateTopicKey = kMqttStateTopic;
-  g_mqttPump.begin(ZeroKernel,
-                   mqttLinkProbe,
-                   mqttConnectStep,
-                   mqttLoopStep,
-                   mqttPublishStep,
-                   mqttConfig);
-  g_mqttPump.setTransportProbe(isWiFiConnected);
+  if (kEnableMqttByDefault) {
+    mqttConfig.stateTopicKey = kMqttStateTopic;
+    g_mqttPump.begin(ZeroKernel,
+                     mqttLinkProbe,
+                     mqttConnectStep,
+                     mqttLoopStep,
+                     mqttPublishStep,
+                     mqttConfig);
+    g_mqttPump.setTransportProbe(isWiFiConnected);
+  }
 
 #if defined(ARDUINO_ARCH_ESP8266)
-  ZeroKernel.addTask("Sample", sampleTask, ZeroNetProfileEsp8266::kSampleTaskIntervalMs, 0);
-  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, ZeroNetProfileEsp8266::kWiFiTaskIntervalMs,
-                     ZeroNetProfileEsp8266::kWiFiTaskStartDelayMs);
+  ZeroKernel.addTask("Sample", sampleTask, ZeroNetActiveEsp8266Profile::kSampleTaskIntervalMs, 0);
+  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, ZeroNetActiveEsp8266Profile::kWiFiTaskIntervalMs,
+                     ZeroNetActiveEsp8266Profile::kWiFiTaskStartDelayMs);
   if (kEnableHttpByDefault) {
-    ZeroKernel.addTask("HttpPump", httpPumpTask, ZeroNetProfileEsp8266::kHttpTaskIntervalMs,
-                       ZeroNetProfileEsp8266::kHttpTaskStartDelayMs);
+    ZeroKernel.addTask("HttpPump", httpPumpTask, ZeroNetActiveEsp8266Profile::kHttpTaskIntervalMs,
+                       ZeroNetActiveEsp8266Profile::kHttpTaskStartDelayMs);
   }
-  ZeroKernel.addTask("MqttPump", mqttPumpTask, ZeroNetProfileEsp8266::kMqttTaskIntervalMs,
-                     ZeroNetProfileEsp8266::kMqttTaskStartDelayMs);
-  ZeroKernel.addTask("Dispatch", dispatchTask, ZeroNetProfileEsp8266::kDispatchTaskIntervalMs,
-                     ZeroNetProfileEsp8266::kDispatchTaskStartDelayMs);
+  if (kEnableMqttByDefault) {
+    ZeroKernel.addTask("MqttPump", mqttPumpTask, ZeroNetActiveEsp8266Profile::kMqttTaskIntervalMs,
+                       ZeroNetActiveEsp8266Profile::kMqttTaskStartDelayMs);
+  }
+  ZeroKernel.addTask("Dispatch", dispatchTask, ZeroNetActiveEsp8266Profile::kDispatchTaskIntervalMs,
+                     ZeroNetActiveEsp8266Profile::kDispatchTaskStartDelayMs);
 #else
   ZeroKernel.addTask("Sample", sampleTask, kSampleTaskIntervalMs, 0);
   ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 100, kWiFiMaintStartDelayMs);
@@ -468,7 +481,7 @@ void setup() {
 #endif
   ZeroKernel.addTask("Report", reportTask,
 #if defined(ARDUINO_ARCH_ESP8266)
-                     ZeroNetProfileEsp8266::kReportTaskIntervalMs,
+                     ZeroNetActiveEsp8266Profile::kReportTaskIntervalMs,
 #else
                      250,
 #endif
@@ -480,7 +493,9 @@ void setup() {
     ZeroKernel.setTaskPriority("HttpPump", Kernel::kPriorityNormal);
   }
 #if defined(ARDUINO_ARCH_ESP8266)
-  ZeroKernel.setTaskPriority("MqttPump", Kernel::kPriorityLow);
+  if (kEnableMqttByDefault) {
+    ZeroKernel.setTaskPriority("MqttPump", Kernel::kPriorityLow);
+  }
   ZeroKernel.setTaskPriority("Dispatch", Kernel::kPriorityLow);
 #else
   ZeroKernel.setTaskPriority("MqttPump", Kernel::kPriorityNormal);

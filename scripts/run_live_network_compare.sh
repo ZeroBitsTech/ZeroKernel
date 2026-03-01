@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARDUINO_CLI="${ROOT_DIR}/bin/arduino-cli"
 BOARD="${1:-esp32}"
 PORT_OVERRIDE="${2:-}"
+ESP8266_NET_PROFILE="${ESP8266_NET_PROFILE:-mqtt}"
 CAPTURE_HELPER="${ROOT_DIR}/scripts/capture_esp32_serial.py"
 WORK_DIR="${ROOT_DIR}/scripts/.live-network"
 HTTP_STATUS_FILE="${WORK_DIR}/http-status.json"
@@ -127,9 +128,23 @@ MQTT_SUB_PID=$!
 compile_and_upload() {
   local sketch_path="$1"
   local build_log="$2"
+  local extra_flags="-DZEROKERNEL_PROFILE_NETWORK_NODE"
+  if [[ "${BOARD}" == "esp8266" && "${sketch_path}" == "${ROOT_DIR}/examples/LiveNetworkNode" ]]; then
+    case "${ESP8266_NET_PROFILE}" in
+      mqtt|"")
+        ;;
+      http)
+        extra_flags="${extra_flags} -DZEROKERNEL_LIVE_ESP8266_HTTP_FIRST=1"
+        ;;
+      *)
+        echo "Unsupported ESP8266 profile: ${ESP8266_NET_PROFILE}" >&2
+        exit 1
+        ;;
+    esac
+  fi
   "${ARDUINO_CLI}" compile --fqbn "${FQBN}" "${BOARD_OPTIONS[@]}" \
     --library "${ROOT_DIR}" \
-    --build-property "build.extra_flags=-DZEROKERNEL_PROFILE_NETWORK_NODE" \
+    --build-property "build.extra_flags=${extra_flags}" \
     --upload -p "${PORT}" \
     "${sketch_path}" 2>&1 | tee "${build_log}"
 }

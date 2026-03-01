@@ -1,5 +1,5 @@
-#ifndef ZEROKERNEL_MODULES_NET_ZERONETPROFILEESP8266_H
-#define ZEROKERNEL_MODULES_NET_ZERONETPROFILEESP8266_H
+#ifndef ZEROKERNEL_MODULES_NET_ZERONETPROFILEESP8266HTTP_H
+#define ZEROKERNEL_MODULES_NET_ZERONETPROFILEESP8266HTTP_H
 
 #include "ZeroHttpPump.h"
 #include "ZeroMqttPump.h"
@@ -9,12 +9,13 @@ namespace zerokernel {
 namespace modules {
 namespace net {
 
-// Recommended constrained-network preset for ESP8266-class boards.
-// This profile intentionally prefers MQTT cadence over aggressive HTTP churn.
-struct ZeroNetProfileEsp8266 {
+// Recommended constrained HTTP-first preset for ESP8266-class boards.
+// This profile keeps HTTP alive without forcing MQTT churn on a board that is
+// already sensitive to transport wake-ups.
+struct ZeroNetProfileEsp8266Http {
   static const uint8_t kRecommendedIdleStrategy = Kernel::kIdleYield;
-  static const bool kEnableHttpByDefault = false;
-  static const bool kEnableMqttByDefault = true;
+  static const bool kEnableHttpByDefault = true;
+  static const bool kEnableMqttByDefault = false;
   static const unsigned long kSampleTaskIntervalMs = 100UL;
   static const unsigned long kWiFiTaskIntervalMs = 250UL;
   static const unsigned long kHttpTaskIntervalMs = 250UL;
@@ -27,16 +28,16 @@ struct ZeroNetProfileEsp8266 {
   static const unsigned long kMqttTaskStartDelayMs = 125UL;
   static const unsigned long kDispatchTaskStartDelayMs = 175UL;
 
-  static const unsigned long kHttpDispatchPeriodMs = 0UL;
-  static const unsigned long kMqttDispatchPeriodMs = 1000UL;
+  static const unsigned long kHttpDispatchPeriodMs = 1500UL;
+  static const unsigned long kMqttDispatchPeriodMs = 0UL;
   static const unsigned long kHttpIoTimeoutMs = 200UL;
 
   static ZeroWiFiMaintainer::Config wifiConfig() {
     ZeroWiFiMaintainer::Config config;
-    config.pollIntervalMs = 1000UL;
-    config.retryBaseMs = 4000UL;
-    config.retryMaxMs = 12000UL;
-    config.retryJitterMs = 350UL;
+    config.pollIntervalMs = 500UL;
+    config.retryBaseMs = 2000UL;
+    config.retryMaxMs = 8000UL;
+    config.retryJitterMs = 250UL;
     config.stablePollMultiplier = 4;
     config.stableThreshold = 6;
     return config;
@@ -49,7 +50,7 @@ struct ZeroNetProfileEsp8266 {
     config.retryMaxMs = 3200UL;
     config.retryJitterMs = 180UL;
     config.phaseTimeoutMs = 300UL;
-    config.maxRetries = 2;
+    config.maxRetries = 1;
     config.queueWhenLinkDown = false;
     return config;
   }
