@@ -24,9 +24,22 @@ using zerokernel::modules::net::ZeroWiFiMaintainer;
 namespace {
 
 const unsigned long kSamplePeriodUs = 100000UL;
+#if defined(ARDUINO_ARCH_ESP8266)
+const unsigned long kSampleTaskIntervalMs = 100UL;
+const unsigned long kDispatchPeriodMs = 1000UL;
+const unsigned long kHttpIoTimeoutMs = 250UL;
+#else
+const unsigned long kSampleTaskIntervalMs = 1UL;
 const unsigned long kDispatchPeriodMs = 500UL;
+const unsigned long kHttpIoTimeoutMs = 500UL;
+#endif
 const unsigned long kSummaryPeriodMs = 10000UL;
 const unsigned long kMissThresholdUs = 1500UL;
+const unsigned long kWiFiMaintStartDelayMs = 20UL;
+const unsigned long kHttpPumpStartDelayMs = 40UL;
+const unsigned long kMqttPumpStartDelayMs = 60UL;
+const unsigned long kDispatchStartDelayMs = 80UL;
+const unsigned long kReportStartDelayMs = 125UL;
 
 const Kernel::TopicKey kWiFiStateTopic = Kernel::makeTopicKey("live.wifi");
 const Kernel::TopicKey kMqttStateTopic = Kernel::makeTopicKey("live.mqtt");
@@ -94,14 +107,14 @@ void disconnectWiFi() {
 
 ZeroHttpPump::StepResult httpConnectStep(const ZeroHttpPump::Request&, void*) {
   g_httpClient.stop();
-  g_httpClient.setTimeout(900);
+  g_httpClient.setTimeout(kHttpIoTimeoutMs);
   if (!g_httpClient.connect(kHttpHost, kHttpPort)) {
     return ZeroHttpPump::kStepFailed;
   }
   g_httpRequestPrepared = false;
   g_httpResponseSawStatus = false;
   g_httpResponseSuccess = false;
-  g_httpReadDeadlineMs = millis() + 900UL;
+  g_httpReadDeadlineMs = millis() + kHttpIoTimeoutMs;
   g_httpStatusLineLength = 0;
   return ZeroHttpPump::kStepComplete;
 }
@@ -213,7 +226,16 @@ void sampleTask() {
     g_nextExpectedUs = nowUs;
   }
 
+#if defined(ARDUINO_ARCH_ESP8266)
   const unsigned long lagUs = nowUs > g_nextExpectedUs ? nowUs - g_nextExpectedUs : 0;
+#else
+  const long deltaUs = static_cast<long>(nowUs - g_nextExpectedUs);
+  if (deltaUs < 0) {
+    return;
+  }
+
+  const unsigned long lagUs = static_cast<unsigned long>(deltaUs);
+#endif
   g_lagAccumUs += lagUs;
   if (lagUs > g_maxLagUs) {
     g_maxLagUs = lagUs;
@@ -232,7 +254,11 @@ void sampleTask() {
 
 void dispatchTask() {
   const unsigned long nowMs = millis();
+#if defined(ARDUINO_ARCH_ESP8266)
   if ((nowMs - g_lastDispatchAtMs) < kDispatchPeriodMs) {
+#else
+  if (g_lastDispatchAtMs != 0 && (nowMs - g_lastDispatchAtMs) < kDispatchPeriodMs) {
+#endif
     return;
   }
   g_lastDispatchAtMs = nowMs;
@@ -333,6 +359,10 @@ void setup() {
 #endif
 
   g_mqttClient.setServer(kMqttHost, kMqttPort);
+  g_mqttClient.setSocketTimeout(1);
+  g_mqttClient.setKeepAlive(15);
+  g_httpClient.setNoDelay(true);
+  g_mqttTransport.setNoDelay(true);
 
   ZeroKernel.begin(boardMillis);
   ZeroKernel.setIdleStrategy(Kernel::kIdleSleep);
@@ -382,12 +412,20 @@ void setup() {
                    mqttPublishStep,
                    mqttConfig);
 
+#if defined(ARDUINO_ARCH_ESP8266)
   ZeroKernel.addTask("Sample", sampleTask, 100, 0);
-  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 100, 0);
-  ZeroKernel.addTask("HttpPump", httpPumpTask, 100, 0);
-  ZeroKernel.addTask("MqttPump", mqttPumpTask, 100, 0);
-  ZeroKernel.addTask("Dispatch", dispatchTask, 100, 0);
-  ZeroKernel.addTask("Report", reportTask, 250, 0);
+  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 250, 0);
+  ZeroKernel.addTask("HttpPump", httpPumpTask, 200, 0);
+  ZeroKernel.addTask("MqttPump", mqttPumpTask, 200, 0);
+  ZeroKernel.addTask("Dispatch", dispatchTask, 250, 0);
+#else
+  ZeroKernel.addTask("Sample", sampleTask, kSampleTaskIntervalMs, 0);
+  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 250, kWiFiMaintStartDelayMs);
+  ZeroKernel.addTask("HttpPump", httpPumpTask, 100, kHttpPumpStartDelayMs);
+  ZeroKernel.addTask("MqttPump", mqttPumpTask, 100, kMqttPumpStartDelayMs);
+  ZeroKernel.addTask("Dispatch", dispatchTask, kDispatchPeriodMs, kDispatchStartDelayMs);
+#endif
+  ZeroKernel.addTask("Report", reportTask, 250, kReportStartDelayMs);
 
   ZeroKernel.setTaskPriority("Sample", Kernel::kPriorityCritical);
   ZeroKernel.setTaskPriority("WiFiMaint", Kernel::kPriorityHigh);
