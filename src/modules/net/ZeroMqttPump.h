@@ -36,6 +36,7 @@ class ZeroMqttPump {
     unsigned long pollIntervalMs;
     unsigned long retryBaseMs;
     unsigned long retryMaxMs;
+    unsigned long retryJitterMs;
     uint8_t maxRetries;
     bool dropOldestOnFull;
     Kernel::TopicKey stateTopicKey;
@@ -44,6 +45,7 @@ class ZeroMqttPump {
         : pollIntervalMs(50),
           retryBaseMs(500),
           retryMaxMs(5000),
+          retryJitterMs(0),
           maxRetries(2),
           dropOldestOnFull(true),
           stateTopicKey(0) {}
@@ -68,7 +70,8 @@ class ZeroMqttPump {
         lastTickAtMs_(0),
         queueCount_(0),
         pendingRetryAtMs_(0),
-        currentRetryMs_(0) {}
+        currentRetryMs_(0),
+        retrySalt_(0) {}
 
   void begin(Kernel& kernel,
              LinkProbe linkProbe,
@@ -234,7 +237,7 @@ class ZeroMqttPump {
       currentRetryMs_ = config_.retryBaseMs;
     }
 
-    pendingRetryAtMs_ = nowMs + currentRetryMs_;
+    pendingRetryAtMs_ = nowMs + currentRetryMs_ + computeRetryJitter_(nowMs);
     metrics_.recordBackoffSchedule();
 
     if (config_.retryMaxMs > 0 && currentRetryMs_ < config_.retryMaxMs) {
@@ -250,6 +253,15 @@ class ZeroMqttPump {
     if (queueCount_ > 0) {
       --queueCount_;
     }
+  }
+
+  unsigned long computeRetryJitter_(unsigned long nowMs) {
+    if (config_.retryJitterMs == 0) {
+      return 0;
+    }
+
+    ++retrySalt_;
+    return (nowMs + retrySalt_ + queueCount_) % (config_.retryJitterMs + 1UL);
   }
 
   Kernel* kernel_;
@@ -269,6 +281,7 @@ class ZeroMqttPump {
   uint8_t queueCount_;
   unsigned long pendingRetryAtMs_;
   unsigned long currentRetryMs_;
+  unsigned long retrySalt_;
 };
 
 }  // namespace net

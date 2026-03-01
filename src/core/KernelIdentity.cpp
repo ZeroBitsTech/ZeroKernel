@@ -9,7 +9,7 @@ const Kernel::Identity kKernelIdentity = {
     "ZeroBits",
     "Small Bits. Solid Systems.",
     "https://kernel.zerobits.tech",
-    "1.3.1"};
+    "1.4.0"};
 
 }  // namespace
 

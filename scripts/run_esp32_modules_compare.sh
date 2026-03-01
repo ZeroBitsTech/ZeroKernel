@@ -58,7 +58,7 @@ compile_and_upload \
   "${BASELINE_BUILD_LOG}" \
   --library "${ROOT_DIR}"
 capture_serial "${BASELINE_LOG}"
-grep 'BASELINE_NETMODULES' "${BASELINE_LOG}" | tail -n 1
+grep 'NETMODULES window_ms=' "${BASELINE_LOG}" | tail -n 1
 
 echo "Running ESP32 modules demo on ${PORT}"
 compile_and_upload \
@@ -66,7 +66,7 @@ compile_and_upload \
   "${MODULE_BUILD_LOG}" \
   --library "${ROOT_DIR}"
 capture_serial "${MODULE_LOG}"
-grep 'ZEROKERNEL_NETMODULES' "${MODULE_LOG}" | tail -n 1
+grep 'NETMODULES window_ms=' "${MODULE_LOG}" | tail -n 1
 
 python3 - "${BASELINE_LOG}" "${MODULE_LOG}" "${BASELINE_BUILD_LOG}" "${MODULE_BUILD_LOG}" <<'PY'
 import re
@@ -77,10 +77,18 @@ base_path, module_path, base_build_path, module_build_path = sys.argv[1:5]
 
 def parse_last(prefix, path):
     line = ""
+    fallback = ""
     with open(path, "r", encoding="utf-8", errors="ignore") as fh:
         for raw in fh:
-            if raw.startswith(prefix):
-                line = raw.strip()
+            idx = raw.find(prefix)
+            if idx != -1:
+                line = raw[idx:].strip()
+            elif "NETMODULES window_ms=" in raw:
+                fallback_idx = raw.find("NETMODULES")
+                if fallback_idx != -1:
+                    fallback = raw[fallback_idx:].strip()
+    if not line:
+        line = fallback
     if not line:
         raise SystemExit(f"Missing {prefix} line in {path}")
     metrics = {}

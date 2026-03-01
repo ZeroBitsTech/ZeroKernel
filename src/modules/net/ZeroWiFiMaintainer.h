@@ -20,6 +20,7 @@ class ZeroWiFiMaintainer {
     unsigned long pollIntervalMs;
     unsigned long retryBaseMs;
     unsigned long retryMaxMs;
+    unsigned long retryJitterMs;
     bool emitStateChangesOnly;
     bool manageCapabilities;
     Kernel::CapabilityMask capabilityMask;
@@ -29,6 +30,7 @@ class ZeroWiFiMaintainer {
         : pollIntervalMs(250),
           retryBaseMs(1000),
           retryMaxMs(10000),
+          retryJitterMs(0),
           emitStateChangesOnly(true),
           manageCapabilities(false),
           capabilityMask(Kernel::kCapNetwork),
@@ -141,7 +143,7 @@ class ZeroWiFiMaintainer {
       currentRetryMs_ = config_.retryBaseMs;
     }
 
-    nextRetryAtMs_ = nowMs + currentRetryMs_;
+    nextRetryAtMs_ = nowMs + currentRetryMs_ + computeRetryJitter_(nowMs);
 
     if (config_.retryMaxMs > 0 && currentRetryMs_ < config_.retryMaxMs) {
       const unsigned long doubled = currentRetryMs_ * 2UL;
@@ -193,6 +195,14 @@ class ZeroWiFiMaintainer {
     } else {
       kernel_->disableCapabilities(config_.capabilityMask);
     }
+  }
+
+  unsigned long computeRetryJitter_(unsigned long nowMs) const {
+    if (config_.retryJitterMs == 0) {
+      return 0;
+    }
+
+    return (nowMs + connectAttempts_ + reconnectTransitions_) % (config_.retryJitterMs + 1UL);
   }
 
   Kernel* kernel_;

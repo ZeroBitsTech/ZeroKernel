@@ -531,7 +531,7 @@ int testSafeMode() {
 int testGovernanceMetadata() {
   zerokernel::Kernel isolatedKernel;
 
-  expectTrue(isolatedKernel.abiVersion() == 1U, "abi version exposed");
+  expectTrue(isolatedKernel.abiVersion() == 2U, "abi version exposed");
   expectTrue(isolatedKernel.runtimeVersion()[0] != '\0', "runtime version exposed");
   expectTrue(isolatedKernel.state() == zerokernel::Kernel::kStateBoot, "boot state default");
   expectTrue(isolatedKernel.getIdleStrategy() == zerokernel::Kernel::kIdlePlatformHint,

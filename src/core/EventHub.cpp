@@ -375,6 +375,18 @@ bool Kernel::subscribeFast(TopicKey topicKey, EventHandler handler, const char* 
       return false;
 #endif
     }
+
+#if ZEROKERNEL_ENABLE_DIAGNOSTICS && ZEROKERNEL_ENABLE_LEGACY_LABEL_API
+    // Hash collision: same key, different labels — warn once per registration.
+    if (subscribers_[i].topicKey == topicKey) {
+      const char* existingLabel = subscribers_[i].topic;
+      if (existingLabel != NULL && topicLabel != NULL &&
+          !internal::labelsEqual(existingLabel, topicLabel, kTopicNameLength)) {
+        emitSignal_(kSignalTopicKeyCollision, topicLabel, static_cast<unsigned long>(topicKey));
+        break;
+      }
+    }
+#endif
   }
 
   const int freeIndex = findFreeSubscriberIndex_();
@@ -433,6 +445,17 @@ bool Kernel::subscribeTypedFast(TopicKey topicKey,
       return false;
 #endif
     }
+
+#if ZEROKERNEL_ENABLE_DIAGNOSTICS && ZEROKERNEL_ENABLE_LEGACY_LABEL_API
+    if (typedSubscribers_[i].topicKey == topicKey) {
+      const char* existingLabel = typedSubscribers_[i].topic;
+      if (existingLabel != NULL && topicLabel != NULL &&
+          !internal::labelsEqual(existingLabel, topicLabel, kTopicNameLength)) {
+        emitSignal_(kSignalTopicKeyCollision, topicLabel, static_cast<unsigned long>(topicKey));
+        break;
+      }
+    }
+#endif
   }
 
   const int freeIndex = findFreeTypedSubscriberIndex_();
@@ -499,6 +522,17 @@ bool Kernel::registerCommandFast(TopicKey commandKey,
       return false;
 #endif
     }
+
+#if ZEROKERNEL_ENABLE_DIAGNOSTICS && ZEROKERNEL_ENABLE_LEGACY_LABEL_API
+    if (commandHandlers_[i].topicKey == commandKey) {
+      const char* existingLabel = commandHandlers_[i].topic;
+      if (existingLabel != NULL && commandLabel != NULL &&
+          !internal::labelsEqual(existingLabel, commandLabel, kTopicNameLength)) {
+        emitSignal_(kSignalTopicKeyCollision, commandLabel, static_cast<unsigned long>(commandKey));
+        break;
+      }
+    }
+#endif
   }
 
   const int freeIndex = findFreeCommandHandlerIndex_();

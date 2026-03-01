@@ -56,7 +56,8 @@ class Kernel {
     kSignalEventDrop = 3,
     kSignalExecutionOverrun = 4,
     kSignalCommandDrop = 5,
-    kSignalWorkDrop = 6
+    kSignalWorkDrop = 6,
+    kSignalTopicKeyCollision = 7  // Two distinct topic strings hashed to the same TopicKey
   };
 
   enum KernelState : uint8_t {
@@ -154,6 +155,9 @@ class Kernel {
     unsigned long value;
   };
 
+  // ExecutionContract is evaluated cooperatively — the kernel cannot preempt a running task.
+  // maxRuntimeUs specifies the expected upper bound; overrun detection is post-hoc.
+  // On non-Xtensa Arduino platforms, sub-ms detection uses micros(); elsewhere ms granularity applies.
   struct ExecutionContract {
     uint16_t maxRuntimeUs;
     uint8_t flags;
@@ -249,6 +253,7 @@ class Kernel {
     uint32_t workQueued;
     uint32_t workDelivered;
     uint32_t queuedWorkDropped;
+    uint32_t traceOverwriteCount;  // Incremented each time the ring buffer wraps and overwrites
     uint8_t registeredTasks;
     uint8_t activeTasks;
   };
@@ -281,7 +286,7 @@ class Kernel {
   static const uint8_t kMaxCommandQueue = ZEROKERNEL_MAX_COMMAND_QUEUE;
   static const uint8_t kMaxWorkQueue = ZEROKERNEL_MAX_WORK_QUEUE;
   static const uint8_t kMaxTraceEntries = ZEROKERNEL_MAX_TRACE_ENTRIES;
-  static const uint16_t kAbiVersion = 1;
+  static const uint16_t kAbiVersion = 2;  // Bumped: KernelStats layout changed (traceOverwriteCount added)
 
   Kernel();
 
@@ -296,6 +301,7 @@ class Kernel {
 
   void tick();
   void tick(TimeMs nowMs);
+  void stop();
 
   bool suspendTask(const char* name);
   bool resumeTask(const char* name);
@@ -333,6 +339,8 @@ class Kernel {
 
   bool publish(const char* topic, long value);
   bool publishTyped(const char* topic, const EventValue& value);
+  // publishFast / publishTypedFast dispatch synchronously. They are NOT ISR-safe: the subscriber
+  // handler is called inline and may itself call kernel APIs. For ISR contexts use publishDeferredFast.
   bool publishFast(TopicKey topicKey, long value);
   bool publishTypedFast(TopicKey topicKey, const EventValue& value);
   bool publishDeferred(const char* topic, long value);
@@ -596,6 +604,7 @@ class Kernel {
   void serviceHardwareWatchdog_(bool afterTask);
   void inspectHeartbeats_(TimeMs nowMs);
   uint8_t resolveDrainLimit_(uint8_t queuedCount, uint8_t baseLimit, uint8_t capacity) const;
+  uint8_t resolveIdleDrainLimit_(uint8_t queuedCount, uint8_t baseLimit, uint8_t capacity) const;
   void setKernelState_(uint8_t nextState);
   bool dropOldestEvent_();
   bool dropOldestCommand_();
@@ -604,7 +613,7 @@ class Kernel {
   void emitSignal_(uint8_t type, const char* label, unsigned long value);
   bool hasTaskCapabilities_(const TaskSlot& slot) const;
   void syncTaskRuntimeHints_();
-  void drainDeferredQueues_();
+  void drainDeferredQueues_(bool isIdle = false);
 
   int findTaskIndex_(const char* name) const;
   int findFreeTaskIndex_() const;

@@ -87,6 +87,14 @@ void Kernel::dumpStats(TextWriter writer) const {
            static_cast<unsigned long>(timing.worstTaskCycles));
   writeLine(writer, line);
 
+  if (stats.traceOverwriteCount > 0) {
+    snprintf(line,
+             sizeof(line),
+             "kernel trace_overwrites=%lu",
+             static_cast<unsigned long>(stats.traceOverwriteCount));
+    writeLine(writer, line);
+  }
+
   const PanicInfo panicInfo = getLastPanic();
   if (panicInfo.reason != kPanicNone) {
     snprintf(line,

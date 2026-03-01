@@ -82,6 +82,7 @@ void Kernel::pushTrace_(uint8_t type, const char* label, unsigned long value) {
   entry.value = value;
 
   if (traceCount_ == kMaxTraceEntries) {
+    ++kernelStats_.traceOverwriteCount;
     traceHead_ = static_cast<uint8_t>((traceHead_ + 1) % kTraceStorage);
   } else {
     ++traceCount_;

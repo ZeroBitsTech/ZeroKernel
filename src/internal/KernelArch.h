@@ -5,6 +5,10 @@
 
 #include "KernelArchAsm.h"
 
+#if defined(ARDUINO) && !defined(__XTENSA__)
+extern "C" unsigned long micros();
+#endif
+
 namespace zerokernel {
 namespace internal {
 
@@ -63,6 +67,25 @@ inline uint32_t readCycleCounter() {
   return value;
 #else
   return 0;
+#endif
+}
+
+// hasMicrosTimer / readMicrosTimer: microsecond wall-clock for non-Xtensa Arduino targets
+// (RP2040, STM32, AVR, SAMD, etc.). Xtensa platforms use the cycle counter instead.
+// Returns false and 0 on non-Arduino and desktop/native builds.
+inline bool hasMicrosTimer() {
+#if defined(ARDUINO) && !defined(__XTENSA__)
+  return true;
+#else
+  return false;
+#endif
+}
+
+inline uint32_t readMicrosTimer() {
+#if defined(ARDUINO) && !defined(__XTENSA__)
+  return static_cast<uint32_t>(::micros());
+#else
+  return 0U;
 #endif
 }
 

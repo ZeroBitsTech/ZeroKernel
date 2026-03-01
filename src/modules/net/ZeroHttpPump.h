@@ -51,6 +51,7 @@ class ZeroHttpPump {
     unsigned long pollIntervalMs;
     unsigned long retryBaseMs;
     unsigned long retryMaxMs;
+    unsigned long retryJitterMs;
     uint8_t maxRetries;
     bool dropOldestOnFull;
     bool emitCompletionEvents;
@@ -59,6 +60,7 @@ class ZeroHttpPump {
         : pollIntervalMs(0),
           retryBaseMs(250),
           retryMaxMs(2000),
+          retryJitterMs(0),
           maxRetries(2),
           dropOldestOnFull(true),
           emitCompletionEvents(true) {}
@@ -86,7 +88,8 @@ class ZeroHttpPump {
         phaseStartedAtMs_(0),
         activeStartedAtMs_(0),
         nextRetryAtMs_(0),
-        currentRetryMs_(0) {}
+        currentRetryMs_(0),
+        retrySalt_(0) {}
 
   void begin(Kernel& kernel,
              StepCallback connectStep,
@@ -300,7 +303,7 @@ class ZeroHttpPump {
       currentRetryMs_ = config_.retryBaseMs;
     }
 
-    nextRetryAtMs_ = nowMs + currentRetryMs_;
+    nextRetryAtMs_ = nowMs + currentRetryMs_ + computeRetryJitter_(nowMs);
     metrics_.recordBackoffSchedule();
 
     if (config_.retryMaxMs > 0 && currentRetryMs_ < config_.retryMaxMs) {
@@ -344,6 +347,15 @@ class ZeroHttpPump {
     activeRequest_ = Request();
   }
 
+  unsigned long computeRetryJitter_(unsigned long nowMs) {
+    if (config_.retryJitterMs == 0) {
+      return 0;
+    }
+
+    ++retrySalt_;
+    return (nowMs + retrySalt_ + activeRequest_.queuedAtMs) % (config_.retryJitterMs + 1UL);
+  }
+
   Kernel* kernel_;
   StepCallback connectStep_;
   StepCallback writeStep_;
@@ -365,6 +377,7 @@ class ZeroHttpPump {
   unsigned long activeStartedAtMs_;
   unsigned long nextRetryAtMs_;
   unsigned long currentRetryMs_;
+  unsigned long retrySalt_;
 };
 
 }  // namespace net

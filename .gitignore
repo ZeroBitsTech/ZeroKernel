@@ -11,3 +11,11 @@
 /bin/
 /TODO.md
 /.codex/
+/KernelWeb/
+.claude
+CLAUDE.md
+CLAUDE_CHANGELOG.md
+CODEX_CHANGELOG.md
+/examples/LiveNetworkBaseline/LocalSecrets.h
+/examples/LiveNetworkNode/LocalSecrets.h
+/scripts/.live-network/

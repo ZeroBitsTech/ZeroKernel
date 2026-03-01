@@ -171,6 +171,8 @@ void Kernel::tick(TimeMs nowMs) {
     TaskSlot& slot = tasks_[taskIndex];
     const TimeMs beforeRun = schedulerNowMs;
     const uint32_t taskBeginCycles = hasCycleCounter ? internal::readCycleCounter() : 0U;
+    const bool hasMicros = internal::hasMicrosTimer();
+    const uint32_t taskBeginUs = hasMicros ? internal::readMicrosTimer() : 0U;
     slot.callback();
 
     TimeMs afterRun = beforeRun;
@@ -216,6 +218,31 @@ void Kernel::tick(TimeMs nowMs) {
       }
 
       recoverIfAllowed_(slot, afterRun);
+    } else if (hasMicros && taskBeginUs != 0U && slot.maxRuntimeUs > 0 &&
+               slot.lastDurationMs == 0) {
+      // Sub-ms contract enforcement: the ms check above would miss tasks finishing in < 1ms.
+      // Use the microsecond timer to detect overruns at finer granularity.
+      const uint32_t taskDurationUs = internal::readMicrosTimer() - taskBeginUs;
+      if (taskDurationUs > static_cast<uint32_t>(slot.maxRuntimeUs)) {
+        ++kernelStats_.executionOverruns;
+        emitSignal_(kSignalExecutionOverrun,
+                    slot.name,
+                    static_cast<unsigned long>(taskDurationUs));
+        recordFailure_(slot, false);
+
+        if ((slot.contractFlags & kContractCritical) != 0U &&
+            (slot.contractFlags & kContractAllowDegrade) == 0U) {
+          const uint8_t panicMode =
+              slot.panicMode != 0 ? slot.panicMode : static_cast<uint8_t>(kPanicEnterSafeMode);
+          triggerPanic(kPanicTaskOverrun,
+                       slot.name,
+                       taskDurationUs,
+                       static_cast<unsigned long>(slot.maxRuntimeUs),
+                       panicMode);
+        }
+
+        recoverIfAllowed_(slot, afterRun);
+      }
     }
 
     drainDeferredQueues_();
@@ -234,7 +261,8 @@ void Kernel::tick(TimeMs nowMs) {
     ++kernelStats_.schedulerIdleLoops;
   }
 
-  drainDeferredQueues_();
+  // When idle (no task ran this tick), use a larger drain budget to prevent queue starvation.
+  drainDeferredQueues_(/*isIdle=*/!executedTask);
   lastTickAtMs_ = schedulerNowMs;
   kernelStats_.uptimeMs = lastTickAtMs_ - bootAtMs_;
   kernelStats_.registeredTasks = registeredTaskCount_;
@@ -308,27 +336,87 @@ void Kernel::inspectHeartbeats_(TimeMs nowMs) {
   }
 }
 
-void Kernel::drainDeferredQueues_() {
+void Kernel::drainDeferredQueues_(bool isIdle) {
+  // When idle (no task ran this tick), use a larger drain budget than the
+  // normal per-tick limit, but keep it explicitly bounded so one idle tick
+  // cannot silently become an "unlimited" queue sweep.
   if (eventQueueCount_ > 0) {
-    drainEventQueue_(resolveDrainLimit_(
-        eventQueueCount_,
-        static_cast<uint8_t>(ZEROKERNEL_EVENT_DRAIN_PER_TICK),
-        static_cast<uint8_t>(kMaxEventQueue)));
+    drainEventQueue_(isIdle
+        ? resolveIdleDrainLimit_(
+              eventQueueCount_,
+              static_cast<uint8_t>(ZEROKERNEL_EVENT_DRAIN_PER_TICK),
+              static_cast<uint8_t>(kMaxEventQueue))
+        : resolveDrainLimit_(
+              eventQueueCount_,
+              static_cast<uint8_t>(ZEROKERNEL_EVENT_DRAIN_PER_TICK),
+              static_cast<uint8_t>(kMaxEventQueue)));
   }
 
   if (commandQueueCount_ > 0) {
-    drainCommandQueue_(resolveDrainLimit_(
-        commandQueueCount_,
-        static_cast<uint8_t>(ZEROKERNEL_COMMAND_DRAIN_PER_TICK),
-        static_cast<uint8_t>(kMaxCommandQueue)));
+    drainCommandQueue_(isIdle
+        ? resolveIdleDrainLimit_(
+              commandQueueCount_,
+              static_cast<uint8_t>(ZEROKERNEL_COMMAND_DRAIN_PER_TICK),
+              static_cast<uint8_t>(kMaxCommandQueue))
+        : resolveDrainLimit_(
+              commandQueueCount_,
+              static_cast<uint8_t>(ZEROKERNEL_COMMAND_DRAIN_PER_TICK),
+              static_cast<uint8_t>(kMaxCommandQueue)));
   }
 
   if (workQueueCount_ > 0) {
-    drainWorkQueue_(resolveDrainLimit_(
-        workQueueCount_,
-        static_cast<uint8_t>(ZEROKERNEL_WORK_DRAIN_PER_TICK),
-        static_cast<uint8_t>(kMaxWorkQueue)));
+    drainWorkQueue_(isIdle
+        ? resolveIdleDrainLimit_(
+              workQueueCount_,
+              static_cast<uint8_t>(ZEROKERNEL_WORK_DRAIN_PER_TICK),
+              static_cast<uint8_t>(kMaxWorkQueue))
+        : resolveDrainLimit_(
+              workQueueCount_,
+              static_cast<uint8_t>(ZEROKERNEL_WORK_DRAIN_PER_TICK),
+              static_cast<uint8_t>(kMaxWorkQueue)));
   }
+}
+
+void Kernel::stop() {
+  // Reset runtime activity and counters while preserving task registrations.
+  // This leaves the kernel quiescent from a scheduling perspective: no queued
+  // work, no sticky panic/trace state, and task runtime counters reset so
+  // begin() can start from a clean baseline without re-registering tasks.
+  const TimeMs stoppedAtMs = currentTime_();
+
+  resetEventQueue_();
+  resetCommandQueue_();
+  resetWorkQueue_();
+  resetTrace_();
+  internal::atomicStoreU32(&eventFlags_, 0);
+  resetKernelStats_();
+  lastPanic_ = PanicInfo();
+  safeMode_ = false;
+  safeModePriorityFloor_ = kPriorityHigh;
+  idleStrategy_ = kIdlePlatformHint;
+
+  for (uint8_t i = 0; i < kMaxTasks; ++i) {
+    if (!tasks_[i].inUse) {
+      continue;
+    }
+
+    tasks_[i].runCount = 0;
+    tasks_[i].failureCount = 0;
+    tasks_[i].consecutiveFailures = 0;
+#if ZEROKERNEL_ENABLE_EXTENDED_TASK_METRICS
+    tasks_[i].lastLagMs = 0;
+    tasks_[i].maxLagMs = 0;
+    tasks_[i].deadlineMissCount = 0;
+#endif
+    resetRuntimeState_(tasks_[i], stoppedAtMs);
+  }
+
+  syncTaskRuntimeHints_();
+  kernelStats_.registeredTasks = registeredTaskCount_;
+  kernelStats_.activeTasks = 0;
+
+  started_ = false;
+  setKernelState_(kStateBoot);
 }
 
 void Kernel::syncTaskRuntimeHints_() {
@@ -380,6 +468,32 @@ uint8_t Kernel::resolveDrainLimit_(uint8_t queuedCount,
 
   return queuedCount < limit ? queuedCount : limit;
 #endif
+}
+
+uint8_t Kernel::resolveIdleDrainLimit_(uint8_t queuedCount,
+                                       uint8_t baseLimit,
+                                       uint8_t capacity) const {
+  if (queuedCount == 0) {
+    return 0;
+  }
+
+  if (baseLimit == 0) {
+    return queuedCount;
+  }
+
+  uint16_t limit =
+      static_cast<uint16_t>(baseLimit) * static_cast<uint16_t>(ZEROKERNEL_IDLE_DRAIN_MULTIPLIER);
+
+  if (limit < baseLimit) {
+    limit = baseLimit;
+  }
+
+  if (capacity > 0 && limit > capacity) {
+    limit = capacity;
+  }
+
+  const uint8_t resolved = limit > 255U ? 255U : static_cast<uint8_t>(limit);
+  return queuedCount < resolved ? queuedCount : resolved;
 }
 
 int Kernel::selectNextRunnableTask_(TimeMs nowMs) const {
