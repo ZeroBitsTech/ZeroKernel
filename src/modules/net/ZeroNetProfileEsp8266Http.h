@@ -28,7 +28,7 @@ struct ZeroNetProfileEsp8266Http {
   static const unsigned long kMqttTaskStartDelayMs = 125UL;
   static const unsigned long kDispatchTaskStartDelayMs = 175UL;
 
-  static const unsigned long kHttpDispatchPeriodMs = 1500UL;
+  static const unsigned long kHttpDispatchPeriodMs = 2000UL;
   static const unsigned long kMqttDispatchPeriodMs = 0UL;
   static const unsigned long kHttpIoTimeoutMs = 450UL;
   static const uint8_t kHttpStablePollsRequired = 1;
