@@ -24,6 +24,10 @@ PASSWORD="${PASSWORD:-sayaganteng}"
 HTTP_HOST_OVERRIDE="${HTTP_HOST:-}"
 MQTT_HOST_OVERRIDE="${MQTT_HOST:-}"
 HOST_IP_OVERRIDE="${HOST_IP:-}"
+HTTP_TARGET_PORT="${HTTP_TARGET_PORT:-${HTTP_PORT}}"
+MQTT_TARGET_PORT="${MQTT_TARGET_PORT:-${MQTT_PORT}}"
+HTTP_BIND_PORT="${HTTP_BIND_PORT:-}"
+MQTT_BIND_PORT="${MQTT_BIND_PORT:-}"
 HTTP_CAPTURE_SECONDS="${HTTP_CAPTURE_SECONDS:-14}"
 CAPTURE_START_DELAY="${CAPTURE_START_DELAY:-2}"
 MQTT_CAPTURE_COUNT="${MQTT_CAPTURE_COUNT:-50}"
@@ -31,6 +35,26 @@ HTTP_SERVER_PID=""
 MQTT_SUB_PID=""
 
 mkdir -p "${WORK_DIR}"
+
+find_free_port() {
+  local start_port="$1"
+  python3 - "$start_port" <<'PY'
+import socket
+import sys
+
+start = int(sys.argv[1])
+for port in range(start, start + 64):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            continue
+        print(port)
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
 
 if [[ ! -x "${ARDUINO_CLI}" ]]; then
   echo "arduino-cli not found at ${ARDUINO_CLI}" >&2
@@ -40,6 +64,13 @@ fi
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is required for local MQTT validation" >&2
   exit 1
+fi
+
+if [[ -z "${HTTP_BIND_PORT}" ]]; then
+  HTTP_BIND_PORT="$(find_free_port "${HTTP_PORT}")"
+fi
+if [[ -z "${MQTT_BIND_PORT}" ]]; then
+  MQTT_BIND_PORT="$(find_free_port "${MQTT_PORT}")"
 fi
 
 case "${BOARD}" in
@@ -91,6 +122,13 @@ if [[ -z "${HTTP_HOST_OVERRIDE}" && -z "${MQTT_HOST_OVERRIDE}" && -n "${ACTIVE_W
   echo "warning: set HOST_IP/HTTP_HOST/MQTT_HOST explicitly or join the laptop to the target SSID for true end-to-end validation." >&2
 fi
 
+if command -v nmcli >/dev/null 2>&1; then
+  if ! nmcli -t -f SSID dev wifi list 2>/dev/null | rg -Fxq "${SSID}"; then
+    echo "warning: target SSID '${SSID}' is not visible in the current local Wi-Fi scan." >&2
+    echo "warning: the SSID may be hidden, out of range, 5 GHz only, or otherwise unsuitable for the board." >&2
+  fi
+fi
+
 write_secrets() {
   local target="$1"
   cat >"${target}" <<EOF
@@ -100,10 +138,10 @@ write_secrets() {
 static const char* kWiFiSsid = "${SSID}";
 static const char* kWiFiPassword = "${PASSWORD}";
 static const char* kHttpHost = "${HTTP_HOST_VALUE}";
-static const uint16_t kHttpPort = ${HTTP_PORT};
+static const uint16_t kHttpPort = ${HTTP_TARGET_PORT};
 static const char* kHttpPath = "/api/data";
 static const char* kMqttHost = "${MQTT_HOST_VALUE}";
-static const uint16_t kMqttPort = ${MQTT_PORT};
+static const uint16_t kMqttPort = ${MQTT_TARGET_PORT};
 static const char* kMqttTopic = "${MQTT_TOPIC}";
 
 #endif
@@ -126,7 +164,7 @@ write_secrets "${ROOT_DIR}/examples/LiveNetworkNode/LocalSecrets.h"
 
 python3 "${ROOT_DIR}/scripts/live_http_receiver.py" \
   --host 0.0.0.0 \
-  --port "${HTTP_PORT}" \
+  --port "${HTTP_BIND_PORT}" \
   --status-file "${HTTP_STATUS_FILE}" \
   >"${HTTP_LOG}" 2>&1 &
 HTTP_SERVER_PID=$!
@@ -134,7 +172,7 @@ sleep 1
 
 MQTT_CONFIG="${WORK_DIR}/mosquitto.conf"
 cat >"${MQTT_CONFIG}" <<EOF
-listener ${MQTT_PORT} 0.0.0.0
+listener ${MQTT_BIND_PORT} 0.0.0.0
 allow_anonymous true
 persistence false
 EOF
@@ -146,7 +184,7 @@ docker run -d --name zerokernel-mqtt-broker --network host \
 sleep 2
 
 docker run --rm --network host eclipse-mosquitto:2 \
-  mosquitto_sub -h 127.0.0.1 -p "${MQTT_PORT}" -t "${MQTT_TOPIC}" -v \
+  mosquitto_sub -h 127.0.0.1 -p "${MQTT_BIND_PORT}" -t "${MQTT_TOPIC}" -v \
   >"${MQTT_LOG}" 2>&1 &
 MQTT_SUB_PID=$!
 
@@ -211,7 +249,10 @@ raise SystemExit(1)
 PY
 }
 
-echo "Using host targets HTTP=${HTTP_HOST_VALUE}:${HTTP_PORT} MQTT=${MQTT_HOST_VALUE}:${MQTT_PORT}"
+echo "Using host targets HTTP=${HTTP_HOST_VALUE}:${HTTP_TARGET_PORT} MQTT=${MQTT_HOST_VALUE}:${MQTT_TARGET_PORT}"
+if [[ "${HTTP_BIND_PORT}" != "${HTTP_TARGET_PORT}" || "${MQTT_BIND_PORT}" != "${MQTT_TARGET_PORT}" ]]; then
+  echo "Using local bind ports HTTP=${HTTP_BIND_PORT} MQTT=${MQTT_BIND_PORT} for validation helpers"
+fi
 
 echo "Running live baseline on ${BOARD} (${PORT})"
 compile_and_upload "${ROOT_DIR}/examples/LiveNetworkBaseline" "${BASELINE_BUILD_LOG}"
@@ -226,7 +267,7 @@ NODE_LINE="$(parse_last_line "LIVE_NETMODULES window_ms=" "${NODE_LOG}")"
 echo "${NODE_LINE}"
 
 sleep 1
-HTTP_STATUS="$(curl -m 3 -fsS "http://127.0.0.1:${HTTP_PORT}/api/status")"
+HTTP_STATUS="$(curl -m 3 -fsS "http://127.0.0.1:${HTTP_BIND_PORT}/api/status")"
 MQTT_MESSAGES="$(wc -l < "${MQTT_LOG}" | tr -d ' ')"
 
 restore_safe
