@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.1
+
+- Clarified target maturity: optional network modules are now documented as stable enough for ESP32 deployments that validate against their real endpoint, while ESP8266 remains under active hardening.
+- Added transport readiness gating for `ZeroMqttPump`, matching the existing HTTP-side link probe and reducing futile broker connect attempts while Wi-Fi is still down.
+- Synced runtime metadata: runtime version is now `1.4.1` and ABI version is published consistently as `2` in the manifest.
+
 ## Unreleased
 
 - Added generic compare workloads for `EnvMonitor`, `TelemetryGateway`, and `IndustrialLoop`.

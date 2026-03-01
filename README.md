@@ -107,6 +107,12 @@ The optional network helpers are currently marked **BETA**:
 
 They are already useful and validated on desktop plus ESP32 hardware, but they are still under active tuning for footprint, retry behavior, and cross-board transport quirks. The core runtime is the stable layer; the network helpers should be treated as add-on modules that are ready for evaluation and controlled deployments.
 
+Current target maturity:
+
+- **ESP32:** stable enough for production-style evaluation and controlled deployments when validated against the real HTTP/MQTT endpoint you intend to ship with.
+- **ESP8266 / Wemos:** still BETA. Live delivery is real, but timing cost is still under active hardening.
+- **Other supported families:** compile-validated, but network helper maturity should still be treated as evaluation-grade until they receive the same live validation depth.
+
 Current best module tradeoff reference (ESP32, `LEAN_NET`, manual pattern vs module pattern):
 
 - RAM overhead: `+408 bytes`
@@ -116,6 +122,29 @@ Current best module tradeoff reference (ESP32, `LEAN_NET`, manual pattern vs mod
 - Queue pressure: `4 -> 1`
 
 In other words: the modules do cost memory, but the current tuned path keeps that cost bounded and pays it back with better transport throughput and less queue buildup under the same synthetic workload window.
+
+## ESP32 Network Status
+
+The current network helper stack is now strong enough on ESP32 to treat as a practical deployment target, not just a lab demo, as long as you still validate it against your own endpoint, payload size, and retry policy.
+
+Current accepted live compare reference on ESP32:
+
+- baseline:
+  - `sample_runs=47`
+  - `fast_avg_lag_us=112955`
+  - `fast_max_lag_us=1609577`
+  - `fast_miss=12`
+  - `http_rate=73`
+  - `mqtt_rate=73`
+- modules:
+  - `sample_runs=85`
+  - `fast_avg_lag_us=15857`
+  - `fast_max_lag_us=1047913`
+  - `fast_miss=5`
+  - `http_rate=66`
+  - `mqtt_rate=100`
+
+The important part is the shape of the tradeoff: timing improves materially, MQTT delivery becomes clean, and HTTP stays alive under the same live window. That is why the ESP32 path is now documented as stable enough, even though the global module label remains BETA until the ESP8266 path is cleaned up too.
 
 ## General-Purpose Validation Workloads
 
