@@ -16,7 +16,7 @@ struct ZeroNetProfileEsp8266 {
   static const unsigned long kSampleTaskIntervalMs = 100UL;
   static const unsigned long kWiFiTaskIntervalMs = 250UL;
   static const unsigned long kHttpTaskIntervalMs = 250UL;
-  static const unsigned long kMqttTaskIntervalMs = 500UL;
+  static const unsigned long kMqttTaskIntervalMs = 250UL;
   static const unsigned long kDispatchTaskIntervalMs = 250UL;
   static const unsigned long kReportTaskIntervalMs = 250UL;
 
@@ -54,11 +54,11 @@ struct ZeroNetProfileEsp8266 {
 
   static ZeroMqttPump::Config mqttConfig() {
     ZeroMqttPump::Config config;
-    config.pollIntervalMs = 150UL;
+    config.pollIntervalMs = 100UL;
     config.retryBaseMs = 600UL;
     config.retryMaxMs = 3000UL;
     config.retryJitterMs = 180UL;
-    config.idleLoopIntervalMs = 300UL;
+    config.idleLoopIntervalMs = 150UL;
     config.maxRetries = 2;
     config.queueWhenTransportDown = false;
     return config;

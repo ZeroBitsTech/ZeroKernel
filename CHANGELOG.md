@@ -12,6 +12,7 @@
 - Added optional offline queue gating in `ZeroHttpPump` and `ZeroMqttPump` so constrained boards can refuse backlog when link or transport is down.
 - Reduced scheduler contention in the ESP8266 preset by staggering network task start offsets and lowering idle network task cadence.
 - Updated the ESP8266 preset to recommend `kIdleYield` instead of `kIdleSleep`, which materially reduces live timing jitter in the official Wemos validation node.
+- Tuned the ESP8266 preset toward MQTT-first delivery with lighter MQTT dispatch pressure, producing a repeatable Wemos run where MQTT delivery stays live while timing remains at or better than baseline.
 - Added generic compare workloads for `EnvMonitor`, `TelemetryGateway`, and `IndustrialLoop`.
 - Added repeatable ESP32 compare runners plus a cross-target workload compile matrix.
 - Improved telemetry gateway tuning so module throughput rises without queue buildup.
