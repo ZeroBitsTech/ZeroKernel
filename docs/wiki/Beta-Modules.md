@@ -19,7 +19,7 @@ They are already useful and validated on desktop plus ESP32 smoke tests, but the
 Recommended default:
 
 - For constrained ESP8266 boards, start with `ZeroNetProfileEsp8266`. It is the recommended MQTT-first constrained preset: HTTP stays degraded/off by default, offline queueing is rejected, idle MQTT churn is lower, and the preset uses a lighter recommended idle strategy plus staggered network task starts so the board stays more predictable without hand-tuning every interval.
-- If your board is intentionally HTTP-first, use `ZeroNetProfileEsp8266Http` as a separate opt-in path. It keeps the constrained timing discipline but avoids pretending that one default cadence can serve HTTP-heavy and MQTT-heavy nodes equally well. Treat it as experimental until your own endpoint validation confirms live delivery.
+- If your board is intentionally HTTP-first, use `ZeroNetProfileEsp8266Http` as a separate opt-in path. It keeps the constrained timing discipline but avoids pretending that one default cadence can serve HTTP-heavy and MQTT-heavy nodes equally well. The official Wemos compare now shows real HTTP delivery on this path, but it is still experimental because miss count and worst-case lag remain rougher than the MQTT-first constrained preset.
 
 ## What BETA Means Here
 

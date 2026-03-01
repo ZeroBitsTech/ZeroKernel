@@ -18,7 +18,7 @@ struct ZeroNetProfileEsp8266Http {
   static const bool kEnableMqttByDefault = false;
   static const unsigned long kSampleTaskIntervalMs = 100UL;
   static const unsigned long kWiFiTaskIntervalMs = 250UL;
-  static const unsigned long kHttpTaskIntervalMs = 250UL;
+  static const unsigned long kHttpTaskIntervalMs = 100UL;
   static const unsigned long kMqttTaskIntervalMs = 500UL;
   static const unsigned long kDispatchTaskIntervalMs = 250UL;
   static const unsigned long kReportTaskIntervalMs = 1000UL;
@@ -30,7 +30,8 @@ struct ZeroNetProfileEsp8266Http {
 
   static const unsigned long kHttpDispatchPeriodMs = 1500UL;
   static const unsigned long kMqttDispatchPeriodMs = 0UL;
-  static const unsigned long kHttpIoTimeoutMs = 200UL;
+  static const unsigned long kHttpIoTimeoutMs = 450UL;
+  static const uint8_t kHttpStablePollsRequired = 1;
 
   static ZeroWiFiMaintainer::Config wifiConfig() {
     ZeroWiFiMaintainer::Config config;
@@ -50,7 +51,12 @@ struct ZeroNetProfileEsp8266Http {
     config.retryMaxMs = 3200UL;
     config.retryJitterMs = 180UL;
     config.phaseTimeoutMs = 300UL;
+    config.connectPhaseTimeoutMs = 450UL;
+    config.writePhaseTimeoutMs = 100UL;
+    config.readPhaseTimeoutMs = 650UL;
+    config.closePhaseTimeoutMs = 75UL;
     config.maxRetries = 1;
+    config.immediatePhaseBudget = 2;
     config.queueWhenLinkDown = false;
     return config;
   }

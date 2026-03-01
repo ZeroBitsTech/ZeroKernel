@@ -55,7 +55,12 @@ class ZeroHttpPump {
     unsigned long retryMaxMs;
     unsigned long retryJitterMs;
     unsigned long phaseTimeoutMs;
+    unsigned long connectPhaseTimeoutMs;
+    unsigned long writePhaseTimeoutMs;
+    unsigned long readPhaseTimeoutMs;
+    unsigned long closePhaseTimeoutMs;
     uint8_t maxRetries;
+    uint8_t immediatePhaseBudget;
     bool dropOldestOnFull;
     bool queueWhenLinkDown;
     bool emitCompletionEvents;
@@ -78,14 +83,18 @@ class ZeroHttpPump {
           retryJitterMs(100),
           phaseTimeoutMs(300),
 #endif
+          connectPhaseTimeoutMs(0),
+          writePhaseTimeoutMs(0),
+          readPhaseTimeoutMs(0),
+          closePhaseTimeoutMs(0),
           maxRetries(2),
+          immediatePhaseBudget(1),
           dropOldestOnFull(true),
           queueWhenLinkDown(true),
           emitCompletionEvents(true) {}
   };
 
   static const uint8_t kQueueCapacity = ZEROKERNEL_HTTP_PUMP_QUEUE_CAPACITY;
-  static const uint8_t kImmediatePhaseBudget = 1;
 
   ZeroHttpPump()
       : kernel_(NULL),
@@ -197,7 +206,9 @@ class ZeroHttpPump {
     hasTicked_ = true;
     lastTickAtMs_ = nowMs;
 
-    for (uint8_t stepBudget = 0; stepBudget < kImmediatePhaseBudget; ++stepBudget) {
+    const uint8_t immediatePhaseBudget =
+        config_.immediatePhaseBudget == 0 ? 1 : config_.immediatePhaseBudget;
+    for (uint8_t stepBudget = 0; stepBudget < immediatePhaseBudget; ++stepBudget) {
       if (!active_) {
         if (queueCount_ == 0) {
           return;
@@ -219,8 +230,9 @@ class ZeroHttpPump {
         return;
       }
 
-      if (config_.phaseTimeoutMs > 0 && phaseStartedAtMs_ != 0 &&
-          (nowMs - phaseStartedAtMs_) > config_.phaseTimeoutMs) {
+      const unsigned long phaseTimeoutMs = currentPhaseTimeoutMs_();
+      if (phaseTimeoutMs > 0 && phaseStartedAtMs_ != 0 &&
+          (nowMs - phaseStartedAtMs_) > phaseTimeoutMs) {
         metrics_.recordPhaseTimeout();
         handlePhaseFailure_(nowMs);
         return;
@@ -398,6 +410,22 @@ class ZeroHttpPump {
 
     ++retrySalt_;
     return (nowMs + retrySalt_ + activeRequest_.queuedAtMs) % (config_.retryJitterMs + 1UL);
+  }
+
+  unsigned long currentPhaseTimeoutMs_() const {
+    if (phase_ == kPhaseConnecting && config_.connectPhaseTimeoutMs > 0) {
+      return config_.connectPhaseTimeoutMs;
+    }
+    if (phase_ == kPhaseWriting && config_.writePhaseTimeoutMs > 0) {
+      return config_.writePhaseTimeoutMs;
+    }
+    if (phase_ == kPhaseReading && config_.readPhaseTimeoutMs > 0) {
+      return config_.readPhaseTimeoutMs;
+    }
+    if (phase_ == kPhaseClosing && config_.closePhaseTimeoutMs > 0) {
+      return config_.closePhaseTimeoutMs;
+    }
+    return config_.phaseTimeoutMs;
   }
 
   Kernel* kernel_;

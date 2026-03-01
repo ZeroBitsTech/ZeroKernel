@@ -88,6 +88,7 @@ class ZeroWiFiMaintainer {
     connectAttempts_ = 0;
     reconnectTransitions_ = 0;
     stateNotifications_ = 0;
+    consecutiveStablePolls_ = 0;
   }
 
   void reset() {
@@ -174,6 +175,22 @@ class ZeroWiFiMaintainer {
 
   bool isConnected() const {
     return connected_;
+  }
+
+  bool isStable() const {
+    if (!connected_) {
+      return false;
+    }
+
+    if (config_.stableThreshold == 0) {
+      return true;
+    }
+
+    return consecutiveStablePolls_ >= config_.stableThreshold;
+  }
+
+  uint8_t stablePolls() const {
+    return consecutiveStablePolls_;
   }
 
   unsigned long connectAttempts() const {

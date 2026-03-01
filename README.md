@@ -119,7 +119,7 @@ Recommended board-specific path:
 
 - **ESP32:** use the default network module configs first, then validate against your real endpoint.
 - **ESP8266 / Wemos:** start with `ZeroNetProfileEsp8266`. It is a constrained MQTT-first preset that disables periodic HTTP dispatch by default, prevents offline queue buildup, lowers idle MQTT churn, staggers lighter network task cadence, and recommends a lighter idle strategy. In current validation it is the preferred path for Wemos MQTT delivery, while HTTP remains degraded/off by default unless you deliberately opt back in.
-- **ESP8266 / Wemos (HTTP-specific):** use `ZeroNetProfileEsp8266Http` only when your node is intentionally HTTP-first. It keeps the same constrained timing discipline, but does not try to combine HTTP and MQTT in the same default path. Treat it as an opt-in experimental profile until your own endpoint validation confirms live delivery under your Wi-Fi conditions.
+- **ESP8266 / Wemos (HTTP-specific):** use `ZeroNetProfileEsp8266Http` only when your node is intentionally HTTP-first. It keeps the same constrained timing discipline, but does not try to combine HTTP and MQTT in the same default path. Current validation now shows real HTTP delivery with clean request success under the official local compare, but it is still marked experimental because misses and worst-case lag are not yet as tidy as the MQTT-first constrained path.
 
 Current best module tradeoff reference (ESP32, `LEAN_NET`, manual pattern vs module pattern):
 

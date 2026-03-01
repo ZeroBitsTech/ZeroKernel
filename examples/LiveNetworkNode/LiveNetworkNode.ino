@@ -99,6 +99,17 @@ bool isWiFiConnected() {
   return WiFi.status() == WL_CONNECTED;
 }
 
+bool isHttpTransportReady() {
+#if defined(ARDUINO_ARCH_ESP8266)
+  if (!g_wifiMaintainer.isConnected()) {
+    return false;
+  }
+  return g_wifiMaintainer.stablePolls() >= ZeroNetActiveEsp8266Profile::kHttpStablePollsRequired;
+#else
+  return isWiFiConnected();
+#endif
+}
+
 void connectWiFi() {
   const wl_status_t status = WiFi.status();
   if (status == WL_CONNECTED) {
@@ -299,8 +310,8 @@ void dispatchTask() {
                        (nowMs - g_lastHttpDispatchAtMs) >= kHttpDispatchPeriodMs;
   const bool mqttDue = (nowMs - g_lastMqttDispatchAtMs) >= kMqttDispatchPeriodMs;
 
-  if (httpDue && g_httpPump.queuedCount() == 0 && !g_httpPump.isBusy()) {
-    g_lastHttpDispatchAtMs = nowMs;
+  if (httpDue && g_httpPump.queuedCount() == 0 && !g_httpPump.isBusy() &&
+      isHttpTransportReady()) {
     const int written = snprintf(g_httpPayload, sizeof(g_httpPayload),
                                  "{\"seq\":%lu,\"sensor\":%lu,\"board\":\"module\"}",
                                  g_sampleRuns, g_sensorValue);
@@ -310,7 +321,9 @@ void dispatchTask() {
       request.contentType = "application/json";
       request.body = g_httpPayload;
       request.bodyLength = static_cast<uint16_t>(written);
-      g_httpPump.enqueue(request);
+      if (g_httpPump.enqueue(request)) {
+        g_lastHttpDispatchAtMs = nowMs;
+      }
     }
   }
 
@@ -440,7 +453,7 @@ void setup() {
                      httpReadStep,
                      httpCloseStep,
                      httpConfig);
-    g_httpPump.setLinkProbe(isWiFiConnected);
+    g_httpPump.setLinkProbe(isHttpTransportReady);
   }
 
   ZeroMqttPump::Config mqttConfig;

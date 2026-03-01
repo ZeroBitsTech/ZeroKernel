@@ -30,6 +30,7 @@ struct ZeroNetProfileEsp8266 {
   static const unsigned long kHttpDispatchPeriodMs = 0UL;
   static const unsigned long kMqttDispatchPeriodMs = 1000UL;
   static const unsigned long kHttpIoTimeoutMs = 200UL;
+  static const uint8_t kHttpStablePollsRequired = 0;
 
   static ZeroWiFiMaintainer::Config wifiConfig() {
     ZeroWiFiMaintainer::Config config;

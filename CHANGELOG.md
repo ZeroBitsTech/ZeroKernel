@@ -10,11 +10,13 @@
 
 - Added `ZeroNetProfileEsp8266`, a constrained MQTT-first preset for Wemos / ESP8266.
 - Added `ZeroNetProfileEsp8266Http`, an opt-in HTTP-first constrained preset for Wemos / ESP8266 so HTTP and MQTT can be tuned separately instead of forcing one compromise path.
+- Hardened `ZeroHttpPump` with optional phase-specific timeout budgets and configurable intra-tick phase progress, then used that in the ESP8266 HTTP-first preset so the constrained Wemos path can progress connect/write faster without changing the global default pacing.
 - Refined `ZeroNetProfileEsp8266` so HTTP stays truly off by default, MQTT idle churn is lower, and the official Wemos live compare now shows MQTT delivery with timing that beats the naive baseline in the same window.
 - Added optional offline queue gating in `ZeroHttpPump` and `ZeroMqttPump` so constrained boards can refuse backlog when link or transport is down.
 - Reduced scheduler contention in the ESP8266 preset by staggering network task start offsets and lowering idle network task cadence.
 - Updated the ESP8266 preset to recommend `kIdleYield` instead of `kIdleSleep`, which materially reduces live timing jitter in the official Wemos validation node.
 - Tuned the ESP8266 preset toward MQTT-first delivery with lighter MQTT dispatch pressure, producing a repeatable Wemos run where MQTT delivery stays live while timing remains at or better than baseline.
+- Improved the ESP8266 HTTP-first preset so live HTTP delivery is now real and controlled (`http_rate` can hit `100%` in the official compare) while average lag drops sharply versus the naive baseline; the path remains experimental because worst-case lag and misses still need more cleanup.
 - Added generic compare workloads for `EnvMonitor`, `TelemetryGateway`, and `IndustrialLoop`.
 - Added repeatable ESP32 compare runners plus a cross-target workload compile matrix.
 - Improved telemetry gateway tuning so module throughput rises without queue buildup.
