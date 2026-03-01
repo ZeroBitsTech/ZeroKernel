@@ -112,18 +112,27 @@ void disconnectWiFi() {
   g_mqttClient.disconnect();
 }
 
-ZeroHttpPump::StepResult httpConnectStep(const ZeroHttpPump::Request&, void*) {
+void closeHttpClient() {
+#if defined(ARDUINO_ARCH_ESP8266)
+  g_httpClient.abort();
+#else
   g_httpClient.stop();
+#endif
+}
+
+ZeroHttpPump::StepResult httpConnectStep(const ZeroHttpPump::Request&, void*) {
+  closeHttpClient();
   g_httpClient.setTimeout(kHttpIoTimeoutMs);
   const bool connected = g_httpAddressValid ? g_httpClient.connect(g_httpAddress, kHttpPort)
                                             : g_httpClient.connect(kHttpHost, kHttpPort);
   if (!connected) {
+    closeHttpClient();
     return ZeroHttpPump::kStepFailed;
   }
   g_httpRequestPrepared = false;
   g_httpResponseSawStatus = false;
   g_httpResponseSuccess = false;
-  g_httpReadDeadlineMs = millis() + kHttpIoTimeoutMs;
+  g_httpReadDeadlineMs = 0;
   g_httpStatusLineLength = 0;
   return ZeroHttpPump::kStepComplete;
 }
@@ -145,6 +154,7 @@ ZeroHttpPump::StepResult httpWriteStep(const ZeroHttpPump::Request& request, voi
     g_httpClient.print("\r\n\r\n");
     g_httpClient.write(reinterpret_cast<const uint8_t*>(request.body), request.bodyLength);
     g_httpRequestPrepared = true;
+    g_httpReadDeadlineMs = millis() + kHttpIoTimeoutMs;
   }
 
   return ZeroHttpPump::kStepComplete;
@@ -152,8 +162,11 @@ ZeroHttpPump::StepResult httpWriteStep(const ZeroHttpPump::Request& request, voi
 
 ZeroHttpPump::StepResult httpReadStep(const ZeroHttpPump::Request&, void*) {
   if (!g_httpClient.connected() && !g_httpClient.available()) {
-    return g_httpResponseSawStatus && g_httpResponseSuccess ? ZeroHttpPump::kStepComplete
-                                                           : ZeroHttpPump::kStepFailed;
+    if (g_httpResponseSawStatus && g_httpResponseSuccess) {
+      return ZeroHttpPump::kStepComplete;
+    }
+    closeHttpClient();
+    return ZeroHttpPump::kStepFailed;
   }
 
   while (g_httpClient.available()) {
@@ -170,7 +183,11 @@ ZeroHttpPump::StepResult httpReadStep(const ZeroHttpPump::Request&, void*) {
               (strncmp(g_httpStatusLine, "HTTP/1.1 2", 10) == 0) ||
               (strncmp(g_httpStatusLine, "HTTP/1.0 2", 10) == 0);
           g_httpStatusLineLength = 0;
-          return g_httpResponseSuccess ? ZeroHttpPump::kStepComplete : ZeroHttpPump::kStepFailed;
+          if (g_httpResponseSuccess) {
+            return ZeroHttpPump::kStepComplete;
+          }
+          closeHttpClient();
+          return ZeroHttpPump::kStepFailed;
         }
       }
       g_httpStatusLineLength = 0;
@@ -182,6 +199,7 @@ ZeroHttpPump::StepResult httpReadStep(const ZeroHttpPump::Request&, void*) {
   }
 
   if (millis() > g_httpReadDeadlineMs) {
+    closeHttpClient();
     return ZeroHttpPump::kStepFailed;
   }
 
@@ -189,7 +207,7 @@ ZeroHttpPump::StepResult httpReadStep(const ZeroHttpPump::Request&, void*) {
 }
 
 ZeroHttpPump::StepResult httpCloseStep(const ZeroHttpPump::Request&, void*) {
-  g_httpClient.stop();
+  closeHttpClient();
   g_httpRequestPrepared = false;
   g_httpResponseSawStatus = false;
   g_httpResponseSuccess = false;

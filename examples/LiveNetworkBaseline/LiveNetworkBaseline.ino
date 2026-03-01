@@ -53,6 +53,14 @@ unsigned long g_nextMqttAttemptAtMs = 0;
 unsigned long g_currentMqttRetryMs = kMqttRetryBaseMs;
 bool g_lastWiFiConnected = false;
 
+void closeHttpClient() {
+#if defined(ARDUINO_ARCH_ESP8266)
+  g_httpClient.abort();
+#else
+  g_httpClient.stop();
+#endif
+}
+
 unsigned long applyBackoffWithJitter(unsigned long nowMs,
                                      unsigned long baseDelayMs,
                                      unsigned long* currentDelayMs,
@@ -142,12 +150,12 @@ bool sendHttpNow(const char* body, size_t length) {
     return false;
   }
 
-  g_httpClient.stop();
+  closeHttpClient();
   g_httpClient.setTimeout(kHttpTimeoutMs);
   const bool connected = g_httpAddressValid ? g_httpClient.connect(g_httpAddress, kHttpPort)
                                             : g_httpClient.connect(kHttpHost, kHttpPort);
   if (!connected) {
-    g_httpClient.stop();
+    closeHttpClient();
     return false;
   }
 
@@ -172,7 +180,7 @@ bool sendHttpNow(const char* body, size_t length) {
         if (statusLine.length() > 0) {
           const bool ok =
               statusLine.startsWith("HTTP/1.1 2") || statusLine.startsWith("HTTP/1.0 2");
-          g_httpClient.stop();
+          closeHttpClient();
           return ok;
         }
         continue;
@@ -188,7 +196,7 @@ bool sendHttpNow(const char* body, size_t length) {
 #endif
   }
 
-  g_httpClient.stop();
+  closeHttpClient();
   return false;
 }
 
