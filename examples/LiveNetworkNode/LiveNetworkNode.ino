@@ -401,6 +401,7 @@ void setup() {
                    mqttLoopStep,
                    mqttPublishStep,
                    mqttConfig);
+  g_mqttPump.setTransportProbe(isWiFiConnected);
 
 #if defined(ARDUINO_ARCH_ESP8266)
   ZeroKernel.addTask("Sample", sampleTask, 100, 0);

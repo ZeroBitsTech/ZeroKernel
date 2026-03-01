@@ -26,6 +26,7 @@ class ZeroMqttPump {
   };
 
   typedef bool (*LinkProbe)();
+  typedef bool (*TransportProbe)();
   typedef bool (*ConnectStep)(void* context);
   typedef void (*LoopStep)(void* context);
   typedef bool (*PublishStep)(Kernel::TopicKey topicKey,
@@ -59,6 +60,7 @@ class ZeroMqttPump {
   ZeroMqttPump()
       : kernel_(NULL),
         linkProbe_(NULL),
+        transportProbe_(NULL),
         connectStep_(NULL),
         loopStep_(NULL),
         publishStep_(NULL),
@@ -93,6 +95,10 @@ class ZeroMqttPump {
     reset();
     started_ = true;
     currentRetryMs_ = config.retryBaseMs;
+  }
+
+  void setTransportProbe(TransportProbe transportProbe) {
+    transportProbe_ = transportProbe;
   }
 
   void reset() {
@@ -159,6 +165,10 @@ class ZeroMqttPump {
     notifyStateIfChanged_();
 
     if (!connected_) {
+      if (transportProbe_ != NULL && !transportProbe_()) {
+        return;
+      }
+
       if (pendingRetryAtMs_ != 0 && nowMs < pendingRetryAtMs_) {
         return;
       }
@@ -277,6 +287,7 @@ class ZeroMqttPump {
 
   Kernel* kernel_;
   LinkProbe linkProbe_;
+  TransportProbe transportProbe_;
   ConnectStep connectStep_;
   LoopStep loopStep_;
   PublishStep publishStep_;

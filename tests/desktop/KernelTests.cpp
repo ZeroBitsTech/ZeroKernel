@@ -249,6 +249,10 @@ bool mqttLinkProbe() {
   return g_mqttLinkUp;
 }
 
+bool mqttTransportProbe() {
+  return g_wifiLinkUp;
+}
+
 bool mqttConnectStep(void*) {
   ++g_mqttConnectCalls;
   g_mqttLinkUp = true;
@@ -1058,6 +1062,7 @@ int testMqttPumpModule() {
   g_mqttLoopCalls = 0;
   g_mqttPublishCalls = 0;
   g_mqttStateEvents = 0;
+  g_wifiLinkUp = false;
   g_mqttLinkUp = false;
   g_mqttLastState = false;
   g_mqttPublishShouldFail = true;
@@ -1071,6 +1076,7 @@ int testMqttPumpModule() {
              mqttLoopStep,
              mqttPublishStep,
              config);
+  pump.setTransportProbe(mqttTransportProbe);
 
   expectTrue(pump.enqueue(zerokernel::Kernel::makeTopicKey("mqtt.out"),
                           zerokernel::Kernel::EventValue::fromUnsigned(7UL)),
@@ -1079,22 +1085,28 @@ int testMqttPumpModule() {
   g_fakeNowMs = 1;
   isolatedKernel.tick();
   pump.tick();
+  expectTrue(g_mqttConnectCalls == 0, "mqtt pump waits for transport before connect");
+
+  g_wifiLinkUp = true;
+  g_fakeNowMs = 2;
+  isolatedKernel.tick();
+  pump.tick();
   expectTrue(pump.isConnected(), "mqtt pump connects on first retry");
   expectTrue(g_mqttStateEvents == 1, "mqtt pump publishes connected state");
   expectTrue(g_mqttLastState, "mqtt pump reports connected");
 
-  g_fakeNowMs = 2;
+  g_fakeNowMs = 3;
   isolatedKernel.tick();
   pump.tick();
   expectTrue(g_mqttPublishCalls == 1, "mqtt pump attempts first publish");
   expectTrue(pump.queuedCount() == 1, "mqtt pump keeps message queued after failure");
 
-  g_fakeNowMs = 4;
+  g_fakeNowMs = 5;
   isolatedKernel.tick();
   pump.tick();
   expectTrue(g_mqttPublishCalls == 1, "mqtt pump honors publish backoff");
 
-  g_fakeNowMs = 7;
+  g_fakeNowMs = 8;
   isolatedKernel.tick();
   pump.tick();
   expectTrue(g_mqttPublishCalls == 2, "mqtt pump retries publish after backoff");
