@@ -401,7 +401,11 @@ void setup() {
   g_mqttTransport.setNoDelay(true);
 
   ZeroKernel.begin(boardMillis);
+#if defined(ARDUINO_ARCH_ESP8266)
+  ZeroKernel.setIdleStrategy(ZeroNetProfileEsp8266::kRecommendedIdleStrategy);
+#else
   ZeroKernel.setIdleStrategy(Kernel::kIdleSleep);
+#endif
   ZeroKernel.subscribeTypedFast(kWiFiStateTopic, onTypedState);
   ZeroKernel.subscribeTypedFast(kMqttStateTopic, onTypedState);
 

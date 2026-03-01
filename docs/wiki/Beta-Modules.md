@@ -18,7 +18,7 @@ They are already useful and validated on desktop plus ESP32 smoke tests, but the
 
 Recommended default:
 
-- For constrained ESP8266 boards, start with `ZeroNetProfileEsp8266`. It is a BETA, MQTT-first constrained preset that keeps HTTP degraded by default and rejects offline queueing so the board stays more predictable without hand-tuning every interval.
+- For constrained ESP8266 boards, start with `ZeroNetProfileEsp8266`. It is a BETA, MQTT-first constrained preset that keeps HTTP degraded by default, rejects offline queueing, and uses a lighter recommended idle strategy plus staggered network task starts so the board stays more predictable without hand-tuning every interval.
 
 ## What BETA Means Here
 

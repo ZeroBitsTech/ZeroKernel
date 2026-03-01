@@ -12,6 +12,7 @@ namespace net {
 // Recommended constrained-network preset for ESP8266-class boards.
 // This profile intentionally prefers MQTT cadence over aggressive HTTP churn.
 struct ZeroNetProfileEsp8266 {
+  static const uint8_t kRecommendedIdleStrategy = Kernel::kIdleYield;
   static const unsigned long kSampleTaskIntervalMs = 100UL;
   static const unsigned long kWiFiTaskIntervalMs = 250UL;
   static const unsigned long kHttpTaskIntervalMs = 250UL;
