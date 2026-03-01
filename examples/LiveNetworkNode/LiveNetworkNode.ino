@@ -403,9 +403,6 @@ void setup() {
   ZeroKernel.subscribeTypedFast(kMqttStateTopic, onTypedState);
 
   ZeroWiFiMaintainer::Config wifiConfig;
-#if defined(ARDUINO_ARCH_ESP8266)
-  wifiConfig.stablePollMultiplier = 2;
-#endif
   wifiConfig.manageCapabilities = true;
   wifiConfig.capabilityMask = Kernel::kCapNetwork;
   wifiConfig.stateTopicKey = kWiFiStateTopic;

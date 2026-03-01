@@ -65,7 +65,7 @@ class ZeroHttpPump {
           retryBaseMs(500),
           retryMaxMs(3000),
           retryJitterMs(150),
-          phaseTimeoutMs(200),
+          phaseTimeoutMs(300),
 #elif defined(ARDUINO_ARCH_ESP32)
           retryBaseMs(500),
           retryMaxMs(3000),
