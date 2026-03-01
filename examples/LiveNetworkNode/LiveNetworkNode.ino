@@ -67,9 +67,17 @@ bool isWiFiConnected() {
 }
 
 void connectWiFi() {
-  if (WiFi.status() != WL_CONNECTED) {
+  const wl_status_t status = WiFi.status();
+  if (status == WL_CONNECTED || status == WL_IDLE_STATUS) {
+    return;
+  }
+#if defined(ARDUINO_ARCH_ESP8266)
+  if (status == WL_DISCONNECTED) {
     WiFi.begin(kWiFiSsid, kWiFiPassword);
   }
+#else
+  WiFi.begin(kWiFiSsid, kWiFiPassword);
+#endif
 }
 
 void disconnectWiFi() {
@@ -258,7 +266,7 @@ void mqttPumpTask() {
 unsigned long percentage(unsigned long ok, unsigned long fail) {
   const unsigned long total = ok + fail;
   if (total == 0) {
-    return 100;
+    return 0;
   }
   return (ok * 100UL) / total;
 }
@@ -322,20 +330,26 @@ void setup() {
   ZeroKernel.subscribeTypedFast(kMqttStateTopic, onTypedState);
 
   ZeroWiFiMaintainer::Config wifiConfig;
-  wifiConfig.pollIntervalMs = 250;
-  wifiConfig.retryBaseMs = 800;
-  wifiConfig.retryMaxMs = 8000;
-  wifiConfig.retryJitterMs = 250;
+  wifiConfig.pollIntervalMs = 500;
+#if defined(ARDUINO_ARCH_ESP8266)
+  wifiConfig.retryBaseMs = 3000;
+  wifiConfig.retryMaxMs = 15000;
+  wifiConfig.retryJitterMs = 500;
+#else
+  wifiConfig.retryBaseMs = 1000;
+  wifiConfig.retryMaxMs = 10000;
+  wifiConfig.retryJitterMs = 300;
+#endif
   wifiConfig.manageCapabilities = true;
   wifiConfig.capabilityMask = Kernel::kCapNetwork;
   wifiConfig.stateTopicKey = kWiFiStateTopic;
   g_wifiMaintainer.begin(ZeroKernel, isWiFiConnected, connectWiFi, disconnectWiFi, wifiConfig);
 
   ZeroHttpPump::Config httpConfig;
-  httpConfig.pollIntervalMs = 25;
-  httpConfig.retryBaseMs = 300;
-  httpConfig.retryMaxMs = 1500;
-  httpConfig.retryJitterMs = 120;
+  httpConfig.pollIntervalMs = 75;
+  httpConfig.retryBaseMs = 500;
+  httpConfig.retryMaxMs = 3000;
+  httpConfig.retryJitterMs = 150;
   httpConfig.maxRetries = 2;
   g_httpPump.begin(ZeroKernel,
                    httpConnectStep,
@@ -345,10 +359,10 @@ void setup() {
                    httpConfig);
 
   ZeroMqttPump::Config mqttConfig;
-  mqttConfig.pollIntervalMs = 25;
-  mqttConfig.retryBaseMs = 400;
-  mqttConfig.retryMaxMs = 2000;
-  mqttConfig.retryJitterMs = 180;
+  mqttConfig.pollIntervalMs = 75;
+  mqttConfig.retryBaseMs = 500;
+  mqttConfig.retryMaxMs = 3000;
+  mqttConfig.retryJitterMs = 200;
   mqttConfig.maxRetries = 2;
   mqttConfig.stateTopicKey = kMqttStateTopic;
   g_mqttPump.begin(ZeroKernel,
@@ -359,17 +373,17 @@ void setup() {
                    mqttConfig);
 
   ZeroKernel.addTask("Sample", sampleTask, 100, 0);
-  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 50, 0);
-  ZeroKernel.addTask("HttpPump", httpPumpTask, 25, 0);
-  ZeroKernel.addTask("MqttPump", mqttPumpTask, 25, 0);
-  ZeroKernel.addTask("Dispatch", dispatchTask, 50, 0);
+  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 100, 0);
+  ZeroKernel.addTask("HttpPump", httpPumpTask, 75, 0);
+  ZeroKernel.addTask("MqttPump", mqttPumpTask, 75, 0);
+  ZeroKernel.addTask("Dispatch", dispatchTask, 100, 0);
   ZeroKernel.addTask("Report", reportTask, 250, 0);
 
   ZeroKernel.setTaskPriority("Sample", Kernel::kPriorityCritical);
   ZeroKernel.setTaskPriority("WiFiMaint", Kernel::kPriorityHigh);
-  ZeroKernel.setTaskPriority("HttpPump", Kernel::kPriorityHigh);
-  ZeroKernel.setTaskPriority("MqttPump", Kernel::kPriorityHigh);
-  ZeroKernel.setTaskPriority("Dispatch", Kernel::kPriorityHigh);
+  ZeroKernel.setTaskPriority("HttpPump", Kernel::kPriorityNormal);
+  ZeroKernel.setTaskPriority("MqttPump", Kernel::kPriorityNormal);
+  ZeroKernel.setTaskPriority("Dispatch", Kernel::kPriorityNormal);
   ZeroKernel.setTaskPriority("Report", Kernel::kPriorityLow);
 
   g_startedAtMs = millis();

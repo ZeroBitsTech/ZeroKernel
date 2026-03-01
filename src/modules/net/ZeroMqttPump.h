@@ -9,7 +9,7 @@ namespace modules {
 namespace net {
 
 // Optional cooperative MQTT pump. Header-only and only linked when included.
-// BETA: suitable for evaluation, but still under active transport and retry tuning.
+// BETA: transport cadence is tuned, but release-grade validation is still in progress.
 class ZeroMqttPump {
  public:
   struct Message {
@@ -52,7 +52,7 @@ class ZeroMqttPump {
   };
 
   static const uint8_t kQueueCapacity = ZEROKERNEL_MQTT_PUMP_QUEUE_CAPACITY;
-  static const uint8_t kPublishBurstPerTick = 2;
+  static const uint8_t kPublishBurstPerTick = 1;
 
   ZeroMqttPump()
       : kernel_(NULL),

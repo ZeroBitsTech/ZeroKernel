@@ -89,7 +89,13 @@ void ensureWiFi() {
     return;
   }
 
+#if defined(ARDUINO_ARCH_ESP8266)
+  if (WiFi.status() == WL_DISCONNECTED) {
+    WiFi.begin(kWiFiSsid, kWiFiPassword);
+  }
+#else
   WiFi.begin(kWiFiSsid, kWiFiPassword);
+#endif
   ++g_wifiAttempts;
   g_nextWiFiAttemptAtMs =
       applyBackoffWithJitter(nowMs, kWiFiRetryBaseMs, &g_currentWiFiRetryMs,
@@ -167,7 +173,11 @@ bool sendHttpNow(const char* body, size_t length) {
         statusLine += ch;
       }
     }
+#if defined(ARDUINO_ARCH_ESP8266)
+    yield();
+#else
     delay(1);
+#endif
   }
 
   g_httpClient.stop();
@@ -237,7 +247,7 @@ void dispatchTask() {
 unsigned long percentage(unsigned long ok, unsigned long fail) {
   const unsigned long total = ok + fail;
   if (total == 0) {
-    return 100;
+    return 0;
   }
   return (ok * 100UL) / total;
 }

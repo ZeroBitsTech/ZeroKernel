@@ -9,7 +9,7 @@ namespace modules {
 namespace net {
 
 // Optional cooperative HTTP request pump. Header-only and only linked when included.
-// BETA: suitable for evaluation, but still under active transport and retry tuning.
+// BETA: live transport reliability improved, but still under active validation on real boards.
 class ZeroHttpPump {
  public:
   enum StepResult : int8_t {
@@ -67,7 +67,7 @@ class ZeroHttpPump {
   };
 
   static const uint8_t kQueueCapacity = ZEROKERNEL_HTTP_PUMP_QUEUE_CAPACITY;
-  static const uint8_t kImmediatePhaseBudget = 4;
+  static const uint8_t kImmediatePhaseBudget = 2;
 
   ZeroHttpPump()
       : kernel_(NULL),

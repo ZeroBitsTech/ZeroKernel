@@ -8,7 +8,7 @@ namespace modules {
 namespace net {
 
 // Optional Wi-Fi link helper. No runtime cost unless this module is included.
-// BETA: validated on desktop and ESP32 smoke tests, still under active tuning.
+// BETA: suitable for live evaluation, but still under reconnect and long-run soak validation.
 class ZeroWiFiMaintainer {
  public:
   typedef bool (*LinkProbe)();
