@@ -26,11 +26,13 @@ namespace {
 const unsigned long kSamplePeriodUs = 100000UL;
 #if defined(ARDUINO_ARCH_ESP8266)
 const unsigned long kSampleTaskIntervalMs = 100UL;
-const unsigned long kDispatchPeriodMs = 1000UL;
-const unsigned long kHttpIoTimeoutMs = 250UL;
+const unsigned long kHttpDispatchPeriodMs = 1500UL;
+const unsigned long kMqttDispatchPeriodMs = 1000UL;
+const unsigned long kHttpIoTimeoutMs = 200UL;
 #else
 const unsigned long kSampleTaskIntervalMs = 1UL;
-const unsigned long kDispatchPeriodMs = 500UL;
+const unsigned long kHttpDispatchPeriodMs = 500UL;
+const unsigned long kMqttDispatchPeriodMs = 500UL;
 const unsigned long kHttpIoTimeoutMs = 500UL;
 #endif
 const unsigned long kSummaryPeriodMs = 10000UL;
@@ -63,7 +65,8 @@ uint8_t g_httpStatusLineLength = 0;
 
 unsigned long g_startedAtMs = 0;
 unsigned long g_lastSummaryAtMs = 0;
-unsigned long g_lastDispatchAtMs = 0;
+unsigned long g_lastHttpDispatchAtMs = 0;
+unsigned long g_lastMqttDispatchAtMs = 0;
 unsigned long g_nextExpectedUs = 0;
 unsigned long g_sampleRuns = 0;
 unsigned long g_lagAccumUs = 0;
@@ -254,16 +257,12 @@ void sampleTask() {
 
 void dispatchTask() {
   const unsigned long nowMs = millis();
-#if defined(ARDUINO_ARCH_ESP8266)
-  if ((nowMs - g_lastDispatchAtMs) < kDispatchPeriodMs) {
-#else
-  if (g_lastDispatchAtMs != 0 && (nowMs - g_lastDispatchAtMs) < kDispatchPeriodMs) {
-#endif
-    return;
-  }
-  g_lastDispatchAtMs = nowMs;
 
-  if (g_httpPump.queuedCount() == 0 && !g_httpPump.isBusy()) {
+  const bool httpDue = (nowMs - g_lastHttpDispatchAtMs) >= kHttpDispatchPeriodMs;
+  const bool mqttDue = (nowMs - g_lastMqttDispatchAtMs) >= kMqttDispatchPeriodMs;
+
+  if (httpDue && g_httpPump.queuedCount() == 0 && !g_httpPump.isBusy()) {
+    g_lastHttpDispatchAtMs = nowMs;
     const int written = snprintf(g_httpPayload, sizeof(g_httpPayload),
                                  "{\"seq\":%lu,\"sensor\":%lu,\"board\":\"module\"}",
                                  g_sampleRuns, g_sensorValue);
@@ -277,8 +276,11 @@ void dispatchTask() {
     }
   }
 
-  if (g_mqttPump.queuedCount() < ZeroMqttPump::kQueueCapacity) {
-    g_mqttPump.enqueue(kTelemetryTopic, Kernel::EventValue::fromUnsigned(g_sensorValue), 1);
+  if (mqttDue) {
+    g_lastMqttDispatchAtMs = nowMs;
+    if (g_mqttPump.queuedCount() < ZeroMqttPump::kQueueCapacity) {
+      g_mqttPump.enqueue(kTelemetryTopic, Kernel::EventValue::fromUnsigned(g_sensorValue), 1);
+    }
   }
 }
 
@@ -371,48 +373,27 @@ void setup() {
   ZeroKernel.subscribeTypedFast(kMqttStateTopic, onTypedState);
 
   ZeroWiFiMaintainer::Config wifiConfig;
-  wifiConfig.pollIntervalMs = 500;
 #if defined(ARDUINO_ARCH_ESP8266)
-  wifiConfig.retryBaseMs = 3000;
-  wifiConfig.retryMaxMs = 15000;
-  wifiConfig.retryJitterMs = 500;
-#else
-  wifiConfig.retryBaseMs = 1000;
-  wifiConfig.retryMaxMs = 10000;
-  wifiConfig.retryJitterMs = 300;
+  wifiConfig.retryBaseMs = 1500;
+  wifiConfig.retryMaxMs = 8000;
+  wifiConfig.retryJitterMs = 250;
+  wifiConfig.stablePollMultiplier = 2;
 #endif
-  wifiConfig.stablePollMultiplier = 4;
-  wifiConfig.stableThreshold = 6;
   wifiConfig.manageCapabilities = true;
   wifiConfig.capabilityMask = Kernel::kCapNetwork;
   wifiConfig.stateTopicKey = kWiFiStateTopic;
   g_wifiMaintainer.begin(ZeroKernel, isWiFiConnected, connectWiFi, disconnectWiFi, wifiConfig);
 
   ZeroHttpPump::Config httpConfig;
-  httpConfig.pollIntervalMs = 100;
-  httpConfig.retryBaseMs = 500;
-  httpConfig.retryMaxMs = 3000;
-  httpConfig.retryJitterMs = 150;
-  httpConfig.maxRetries = 2;
-#if defined(ARDUINO_ARCH_ESP8266)
-  httpConfig.phaseTimeoutMs = 300;
-#else
-  httpConfig.phaseTimeoutMs = 600;
-#endif
   g_httpPump.begin(ZeroKernel,
                    httpConnectStep,
                    httpWriteStep,
                    httpReadStep,
                    httpCloseStep,
                    httpConfig);
+  g_httpPump.setLinkProbe(isWiFiConnected);
 
   ZeroMqttPump::Config mqttConfig;
-  mqttConfig.pollIntervalMs = 100;
-  mqttConfig.retryBaseMs = 500;
-  mqttConfig.retryMaxMs = 3000;
-  mqttConfig.retryJitterMs = 200;
-  mqttConfig.maxRetries = 2;
-  mqttConfig.idleLoopIntervalMs = 250;
   mqttConfig.stateTopicKey = kMqttStateTopic;
   g_mqttPump.begin(ZeroKernel,
                    mqttLinkProbe,
@@ -423,16 +404,16 @@ void setup() {
 
 #if defined(ARDUINO_ARCH_ESP8266)
   ZeroKernel.addTask("Sample", sampleTask, 100, 0);
-  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 250, 0);
-  ZeroKernel.addTask("HttpPump", httpPumpTask, 200, 0);
-  ZeroKernel.addTask("MqttPump", mqttPumpTask, 200, 0);
-  ZeroKernel.addTask("Dispatch", dispatchTask, 250, 0);
+  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 100, 0);
+  ZeroKernel.addTask("HttpPump", httpPumpTask, 100, 0);
+  ZeroKernel.addTask("MqttPump", mqttPumpTask, 100, 0);
+  ZeroKernel.addTask("Dispatch", dispatchTask, 100, 0);
 #else
   ZeroKernel.addTask("Sample", sampleTask, kSampleTaskIntervalMs, 0);
-  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 250, kWiFiMaintStartDelayMs);
+  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 100, kWiFiMaintStartDelayMs);
   ZeroKernel.addTask("HttpPump", httpPumpTask, 100, kHttpPumpStartDelayMs);
   ZeroKernel.addTask("MqttPump", mqttPumpTask, 100, kMqttPumpStartDelayMs);
-  ZeroKernel.addTask("Dispatch", dispatchTask, kDispatchPeriodMs, kDispatchStartDelayMs);
+  ZeroKernel.addTask("Dispatch", dispatchTask, 100, kDispatchStartDelayMs);
 #endif
   ZeroKernel.addTask("Report", reportTask, 250, kReportStartDelayMs);
 

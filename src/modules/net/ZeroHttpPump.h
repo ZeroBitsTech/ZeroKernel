@@ -18,6 +18,8 @@ class ZeroHttpPump {
     kStepComplete = 1
   };
 
+  typedef bool (*LinkProbe)();
+
   enum Phase : uint8_t {
     kPhaseIdle = 0,
     kPhaseConnecting = 1,
@@ -58,11 +60,23 @@ class ZeroHttpPump {
     bool emitCompletionEvents;
 
     Config()
-        : pollIntervalMs(0),
-          retryBaseMs(250),
-          retryMaxMs(2000),
-          retryJitterMs(0),
-          phaseTimeoutMs(0),
+        : pollIntervalMs(100),
+#if defined(ARDUINO_ARCH_ESP8266)
+          retryBaseMs(500),
+          retryMaxMs(3000),
+          retryJitterMs(150),
+          phaseTimeoutMs(200),
+#elif defined(ARDUINO_ARCH_ESP32)
+          retryBaseMs(500),
+          retryMaxMs(3000),
+          retryJitterMs(150),
+          phaseTimeoutMs(400),
+#else
+          retryBaseMs(500),
+          retryMaxMs(3000),
+          retryJitterMs(100),
+          phaseTimeoutMs(300),
+#endif
           maxRetries(2),
           dropOldestOnFull(true),
           emitCompletionEvents(true) {}
@@ -73,6 +87,7 @@ class ZeroHttpPump {
 
   ZeroHttpPump()
       : kernel_(NULL),
+        linkProbe_(NULL),
         connectStep_(NULL),
         writeStep_(NULL),
         readStep_(NULL),
@@ -110,6 +125,10 @@ class ZeroHttpPump {
     reset();
     started_ = true;
     currentRetryMs_ = config.retryBaseMs;
+  }
+
+  void setLinkProbe(LinkProbe linkProbe) {
+    linkProbe_ = linkProbe;
   }
 
   void reset() {
@@ -177,10 +196,19 @@ class ZeroHttpPump {
           return;
         }
 
+        if (linkProbe_ != NULL && !linkProbe_()) {
+          return;
+        }
+
         startNextRequest_(nowMs);
       }
 
       if (phase_ == kPhaseConnecting && nextRetryAtMs_ != 0 && nowMs < nextRetryAtMs_) {
+        return;
+      }
+
+      if (phase_ == kPhaseConnecting && linkProbe_ != NULL && !linkProbe_()) {
+        handlePhaseFailure_(nowMs);
         return;
       }
 
@@ -366,6 +394,7 @@ class ZeroHttpPump {
   }
 
   Kernel* kernel_;
+  LinkProbe linkProbe_;
   StepCallback connectStep_;
   StepCallback writeStep_;
   StepCallback readStep_;

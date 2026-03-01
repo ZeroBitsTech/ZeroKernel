@@ -193,6 +193,10 @@ bool wifiLinkProbe() {
   return g_wifiLinkUp;
 }
 
+bool httpLinkProbe() {
+  return g_wifiLinkUp;
+}
+
 void wifiConnectStep() {
   ++g_wifiConnectCalls;
 }
@@ -915,8 +919,10 @@ int testHttpPumpModule() {
       zerokernel::Kernel::makeTopicKey("http.done");
 
   zerokernel::modules::net::ZeroHttpPump::Config config;
+  config.pollIntervalMs = 0;
   config.retryBaseMs = 20;
   config.retryMaxMs = 40;
+  config.retryJitterMs = 0;
   config.maxRetries = 1;
   config.emitCompletionEvents = true;
 
@@ -927,6 +933,7 @@ int testHttpPumpModule() {
   g_httpCloseCalls = 0;
   g_httpCompletionEvents = 0;
   g_httpLastCompletion = false;
+  g_wifiLinkUp = false;
 
   isolatedKernel.begin(fakeClock);
   expectTrue(isolatedKernel.subscribeTypedFast(completionKey, onHttpCompletionEvent),
@@ -937,6 +944,7 @@ int testHttpPumpModule() {
              httpReadStep,
              httpCloseStep,
              config);
+  pump.setLinkProbe(httpLinkProbe);
 
   zerokernel::modules::net::ZeroHttpPump::Request request;
   request.path = "/api/data";
@@ -949,39 +957,41 @@ int testHttpPumpModule() {
   g_fakeNowMs = 1;
   isolatedKernel.tick();
   pump.tick();
+  expectTrue(!pump.isBusy(), "http pump waits for link before starting");
+
+  g_wifiLinkUp = true;
+  g_fakeNowMs = 2;
+  isolatedKernel.tick();
+  pump.tick();
   expectTrue(pump.isBusy(), "http pump becomes busy");
   expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseConnecting,
              "http pump starts in connect phase");
 
-  g_fakeNowMs = 2;
+  g_fakeNowMs = 3;
   isolatedKernel.tick();
   pump.tick();
   expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseWriting,
              "http pump advances to write after connect");
   expectTrue(g_httpWriteCalls == 0, "http pump defers write until next tick");
 
-  g_fakeNowMs = 3;
+  g_fakeNowMs = 4;
   isolatedKernel.tick();
   pump.tick();
   expectTrue(g_httpWriteCalls == 1, "http pump executes write phase");
   expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseReading,
              "http pump advances to read after write");
 
-  g_fakeNowMs = 4;
+  g_fakeNowMs = 5;
   isolatedKernel.tick();
   pump.tick();
   expectTrue(g_httpReadCalls == 1, "http pump executes read phase");
   expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseConnecting,
              "http pump retries after read failure");
 
-  g_fakeNowMs = 10;
+  g_fakeNowMs = 11;
   isolatedKernel.tick();
   pump.tick();
   expectTrue(g_httpConnectCalls == 2, "http pump waits for retry window");
-
-  g_fakeNowMs = 24;
-  isolatedKernel.tick();
-  pump.tick();
 
   g_fakeNowMs = 25;
   isolatedKernel.tick();
@@ -992,6 +1002,10 @@ int testHttpPumpModule() {
   pump.tick();
 
   g_fakeNowMs = 27;
+  isolatedKernel.tick();
+  pump.tick();
+
+  g_fakeNowMs = 28;
   isolatedKernel.tick();
   pump.tick();
 
@@ -1034,6 +1048,8 @@ int testMqttPumpModule() {
   config.pollIntervalMs = 0;
   config.retryBaseMs = 5;
   config.retryMaxMs = 10;
+  config.retryJitterMs = 0;
+  config.idleLoopIntervalMs = 0;
   config.maxRetries = 1;
   config.stateTopicKey = stateKey;
 

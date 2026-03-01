@@ -43,11 +43,11 @@ class ZeroMqttPump {
     Kernel::TopicKey stateTopicKey;
 
     Config()
-        : pollIntervalMs(50),
+        : pollIntervalMs(100),
           retryBaseMs(500),
-          retryMaxMs(5000),
-          retryJitterMs(0),
-          idleLoopIntervalMs(0),
+          retryMaxMs(3000),
+          retryJitterMs(200),
+          idleLoopIntervalMs(250),
           maxRetries(2),
           dropOldestOnFull(true),
           stateTopicKey(0) {}

@@ -29,12 +29,18 @@ class ZeroWiFiMaintainer {
     Kernel::TopicKey stateTopicKey;
 
     Config()
-        : pollIntervalMs(250),
+        : pollIntervalMs(500),
+#if defined(ARDUINO_ARCH_ESP8266)
+          retryBaseMs(3000),
+          retryMaxMs(15000),
+          retryJitterMs(500),
+#else
           retryBaseMs(1000),
           retryMaxMs(10000),
-          retryJitterMs(0),
-          stablePollMultiplier(1),
-          stableThreshold(4),
+          retryJitterMs(300),
+#endif
+          stablePollMultiplier(4),
+          stableThreshold(6),
           emitStateChangesOnly(true),
           manageCapabilities(false),
           capabilityMask(Kernel::kCapNetwork),
