@@ -21,6 +21,9 @@ MQTT_PORT="${MQTT_PORT:-1883}"
 MQTT_TOPIC="${MQTT_TOPIC:-zerokernel/live/telemetry}"
 SSID="${SSID:-sayaganteng}"
 PASSWORD="${PASSWORD:-sayaganteng}"
+HTTP_HOST_OVERRIDE="${HTTP_HOST:-}"
+MQTT_HOST_OVERRIDE="${MQTT_HOST:-}"
+HOST_IP_OVERRIDE="${HOST_IP:-}"
 HTTP_CAPTURE_SECONDS="${HTTP_CAPTURE_SECONDS:-14}"
 CAPTURE_START_DELAY="${CAPTURE_START_DELAY:-2}"
 MQTT_CAPTURE_COUNT="${MQTT_CAPTURE_COUNT:-50}"
@@ -57,13 +60,35 @@ case "${BOARD}" in
     ;;
 esac
 
-HOST_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/ {print $7; exit}')"
+ACTIVE_WIFI_DEVICE="$(nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null | awk -F: '$2=="wifi" && $3=="connected" {print $1; exit}')"
+ACTIVE_WIFI_CONNECTION="$(nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null | awk -F: '$2=="wifi" && $3=="connected" {print $4; exit}')"
+ACTIVE_WIFI_IP=""
+if [[ -n "${ACTIVE_WIFI_DEVICE}" ]]; then
+  ACTIVE_WIFI_IP="$(ip -o -4 addr show dev "${ACTIVE_WIFI_DEVICE}" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)"
+fi
+
+HOST_IP="${HOST_IP_OVERRIDE}"
+if [[ -z "${HOST_IP}" ]]; then
+  HOST_IP="${ACTIVE_WIFI_IP}"
+fi
+if [[ -z "${HOST_IP}" ]]; then
+  HOST_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/ {print $7; exit}')"
+fi
 if [[ -z "${HOST_IP}" ]]; then
   HOST_IP="$(hostname -I | awk '{print $1}')"
 fi
 if [[ -z "${HOST_IP}" ]]; then
   echo "Unable to determine host IP for live network test" >&2
   exit 1
+fi
+
+HTTP_HOST_VALUE="${HTTP_HOST_OVERRIDE:-${HOST_IP}}"
+MQTT_HOST_VALUE="${MQTT_HOST_OVERRIDE:-${HOST_IP}}"
+
+if [[ -z "${HTTP_HOST_OVERRIDE}" && -z "${MQTT_HOST_OVERRIDE}" && -n "${ACTIVE_WIFI_CONNECTION}" && "${ACTIVE_WIFI_CONNECTION}" != "${SSID}" ]]; then
+  echo "warning: host Wi-Fi is '${ACTIVE_WIFI_CONNECTION}' while board target SSID is '${SSID}'." >&2
+  echo "warning: local HTTP/MQTT endpoints on ${HOST_IP} may not be reachable from the board." >&2
+  echo "warning: set HOST_IP/HTTP_HOST/MQTT_HOST explicitly or join the laptop to the target SSID for true end-to-end validation." >&2
 fi
 
 write_secrets() {
@@ -74,10 +99,10 @@ write_secrets() {
 
 static const char* kWiFiSsid = "${SSID}";
 static const char* kWiFiPassword = "${PASSWORD}";
-static const char* kHttpHost = "${HOST_IP}";
+static const char* kHttpHost = "${HTTP_HOST_VALUE}";
 static const uint16_t kHttpPort = ${HTTP_PORT};
 static const char* kHttpPath = "/api/data";
-static const char* kMqttHost = "${HOST_IP}";
+static const char* kMqttHost = "${MQTT_HOST_VALUE}";
 static const uint16_t kMqttPort = ${MQTT_PORT};
 static const char* kMqttTopic = "${MQTT_TOPIC}";
 
@@ -186,7 +211,7 @@ raise SystemExit(1)
 PY
 }
 
-echo "Using host IP ${HOST_IP} for HTTP and MQTT"
+echo "Using host targets HTTP=${HTTP_HOST_VALUE}:${HTTP_PORT} MQTT=${MQTT_HOST_VALUE}:${MQTT_PORT}"
 
 echo "Running live baseline on ${BOARD} (${PORT})"
 compile_and_upload "${ROOT_DIR}/examples/LiveNetworkBaseline" "${BASELINE_BUILD_LOG}"
