@@ -68,14 +68,19 @@ bool isWiFiConnected() {
 
 void connectWiFi() {
   const wl_status_t status = WiFi.status();
-  if (status == WL_CONNECTED || status == WL_IDLE_STATUS) {
+  if (status == WL_CONNECTED) {
     return;
   }
 #if defined(ARDUINO_ARCH_ESP8266)
-  if (status == WL_DISCONNECTED) {
+  if (status == WL_DISCONNECTED || status == WL_IDLE_STATUS ||
+      status == WL_NO_SSID_AVAIL || status == WL_CONNECT_FAILED ||
+      status == WL_CONNECTION_LOST) {
     WiFi.begin(kWiFiSsid, kWiFiPassword);
   }
 #else
+  if (status == WL_IDLE_STATUS) {
+    return;
+  }
   WiFi.begin(kWiFiSsid, kWiFiPassword);
 #endif
 }
@@ -285,8 +290,9 @@ void reportTask() {
   snprintf(line, sizeof(line),
            "LIVE_NETMODULES window_ms=%lu sample_runs=%lu fast_avg_lag_us=%lu "
            "fast_max_lag_us=%lu fast_miss=%lu wifi_attempts=%lu wifi_reconnects=%lu "
-           "http_ok=%lu http_fail=%lu http_rate=%lu mqtt_ok=%lu mqtt_fail=%lu "
-           "mqtt_rate=%lu http_queue=%u mqtt_queue=%u",
+           "http_connect_ok=%lu http_connect_fail=%lu http_ok=%lu http_fail=%lu "
+           "http_rate=%lu mqtt_connect_ok=%lu mqtt_connect_fail=%lu mqtt_ok=%lu "
+           "mqtt_fail=%lu mqtt_rate=%lu http_queue=%u mqtt_queue=%u",
            nowMs - g_startedAtMs,
            g_sampleRuns,
            avgLagUs,
@@ -294,9 +300,13 @@ void reportTask() {
            g_fastMisses,
            g_wifiMaintainer.connectAttempts(),
            g_wifiMaintainer.reconnectTransitions(),
+           httpMetrics.connectSuccesses,
+           httpMetrics.connectFailures,
            httpMetrics.sendSuccesses,
            httpMetrics.sendFailures,
            percentage(httpMetrics.sendSuccesses, httpMetrics.sendFailures),
+           mqttMetrics.connectSuccesses,
+           mqttMetrics.connectFailures,
            mqttMetrics.sendSuccesses,
            mqttMetrics.sendFailures,
            percentage(mqttMetrics.sendSuccesses, mqttMetrics.sendFailures),
@@ -346,7 +356,7 @@ void setup() {
   g_wifiMaintainer.begin(ZeroKernel, isWiFiConnected, connectWiFi, disconnectWiFi, wifiConfig);
 
   ZeroHttpPump::Config httpConfig;
-  httpConfig.pollIntervalMs = 75;
+  httpConfig.pollIntervalMs = 100;
   httpConfig.retryBaseMs = 500;
   httpConfig.retryMaxMs = 3000;
   httpConfig.retryJitterMs = 150;
@@ -359,7 +369,7 @@ void setup() {
                    httpConfig);
 
   ZeroMqttPump::Config mqttConfig;
-  mqttConfig.pollIntervalMs = 75;
+  mqttConfig.pollIntervalMs = 100;
   mqttConfig.retryBaseMs = 500;
   mqttConfig.retryMaxMs = 3000;
   mqttConfig.retryJitterMs = 200;
@@ -374,8 +384,8 @@ void setup() {
 
   ZeroKernel.addTask("Sample", sampleTask, 100, 0);
   ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 100, 0);
-  ZeroKernel.addTask("HttpPump", httpPumpTask, 75, 0);
-  ZeroKernel.addTask("MqttPump", mqttPumpTask, 75, 0);
+  ZeroKernel.addTask("HttpPump", httpPumpTask, 100, 0);
+  ZeroKernel.addTask("MqttPump", mqttPumpTask, 100, 0);
   ZeroKernel.addTask("Dispatch", dispatchTask, 100, 0);
   ZeroKernel.addTask("Report", reportTask, 250, 0);
 

@@ -67,7 +67,7 @@ class ZeroHttpPump {
   };
 
   static const uint8_t kQueueCapacity = ZEROKERNEL_HTTP_PUMP_QUEUE_CAPACITY;
-  static const uint8_t kImmediatePhaseBudget = 2;
+  static const uint8_t kImmediatePhaseBudget = 1;
 
   ZeroHttpPump()
       : kernel_(NULL),

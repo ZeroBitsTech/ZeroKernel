@@ -956,11 +956,18 @@ int testHttpPumpModule() {
   g_fakeNowMs = 2;
   isolatedKernel.tick();
   pump.tick();
-  expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseReading,
-             "http pump advances to read after connect and write");
-  expectTrue(g_httpWriteCalls == 1, "http pump collapses write phase in same tick");
+  expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseWriting,
+             "http pump advances to write after connect");
+  expectTrue(g_httpWriteCalls == 0, "http pump defers write until next tick");
 
   g_fakeNowMs = 3;
+  isolatedKernel.tick();
+  pump.tick();
+  expectTrue(g_httpWriteCalls == 1, "http pump executes write phase");
+  expectTrue(pump.phase() == zerokernel::modules::net::ZeroHttpPump::kPhaseReading,
+             "http pump advances to read after write");
+
+  g_fakeNowMs = 4;
   isolatedKernel.tick();
   pump.tick();
   expectTrue(g_httpReadCalls == 1, "http pump executes read phase");
@@ -977,6 +984,14 @@ int testHttpPumpModule() {
   pump.tick();
 
   g_fakeNowMs = 25;
+  isolatedKernel.tick();
+  pump.tick();
+
+  g_fakeNowMs = 26;
+  isolatedKernel.tick();
+  pump.tick();
+
+  g_fakeNowMs = 27;
   isolatedKernel.tick();
   pump.tick();
 
