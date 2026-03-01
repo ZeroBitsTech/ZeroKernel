@@ -9,6 +9,7 @@
 ## Unreleased
 
 - Added `ZeroNetProfileEsp8266`, a constrained MQTT-first preset for Wemos / ESP8266.
+- Refined `ZeroNetProfileEsp8266` so HTTP stays truly off by default, MQTT idle churn is lower, and the official Wemos live compare now shows MQTT delivery with timing that beats the naive baseline in the same window.
 - Added optional offline queue gating in `ZeroHttpPump` and `ZeroMqttPump` so constrained boards can refuse backlog when link or transport is down.
 - Reduced scheduler contention in the ESP8266 preset by staggering network task start offsets and lowering idle network task cadence.
 - Updated the ESP8266 preset to recommend `kIdleYield` instead of `kIdleSleep`, which materially reduces live timing jitter in the official Wemos validation node.

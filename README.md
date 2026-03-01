@@ -111,13 +111,13 @@ They are already useful and validated on desktop plus ESP32 hardware, but they a
 Current target maturity:
 
 - **ESP32:** stable enough for production-style evaluation and controlled deployments when validated against the real HTTP/MQTT endpoint you intend to ship with.
-- **ESP8266 / Wemos:** still BETA. Live delivery is real, but timing cost is still under active hardening.
+- **ESP8266 / Wemos:** still BETA for full dual-transport use. The constrained MQTT-first preset is now the recommended path and already has repeatable live runs where MQTT delivery is real and timing beats the naive baseline, but full HTTP+MQTT behavior is still under active hardening.
 - **Other supported families:** compile-validated, but network helper maturity should still be treated as evaluation-grade until they receive the same live validation depth.
 
 Recommended board-specific path:
 
 - **ESP32:** use the default network module configs first, then validate against your real endpoint.
-- **ESP8266 / Wemos:** start with `ZeroNetProfileEsp8266`. It is a constrained MQTT-first preset that disables periodic HTTP dispatch by default, prevents offline queue buildup, staggers lighter network task cadence, and recommends a lighter idle strategy. In current validation it is the preferred path for Wemos MQTT delivery, while HTTP remains degraded/off by default.
+- **ESP8266 / Wemos:** start with `ZeroNetProfileEsp8266`. It is a constrained MQTT-first preset that disables periodic HTTP dispatch by default, prevents offline queue buildup, lowers idle MQTT churn, staggers lighter network task cadence, and recommends a lighter idle strategy. In current validation it is the preferred path for Wemos MQTT delivery, while HTTP remains degraded/off by default unless you deliberately opt back in.
 
 Current best module tradeoff reference (ESP32, `LEAN_NET`, manual pattern vs module pattern):
 

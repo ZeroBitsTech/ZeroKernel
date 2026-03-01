@@ -13,12 +13,13 @@ namespace net {
 // This profile intentionally prefers MQTT cadence over aggressive HTTP churn.
 struct ZeroNetProfileEsp8266 {
   static const uint8_t kRecommendedIdleStrategy = Kernel::kIdleYield;
+  static const bool kEnableHttpByDefault = false;
   static const unsigned long kSampleTaskIntervalMs = 100UL;
   static const unsigned long kWiFiTaskIntervalMs = 250UL;
   static const unsigned long kHttpTaskIntervalMs = 250UL;
-  static const unsigned long kMqttTaskIntervalMs = 250UL;
+  static const unsigned long kMqttTaskIntervalMs = 500UL;
   static const unsigned long kDispatchTaskIntervalMs = 250UL;
-  static const unsigned long kReportTaskIntervalMs = 250UL;
+  static const unsigned long kReportTaskIntervalMs = 1000UL;
 
   static const unsigned long kWiFiTaskStartDelayMs = 25UL;
   static const unsigned long kHttpTaskStartDelayMs = 75UL;
@@ -58,7 +59,7 @@ struct ZeroNetProfileEsp8266 {
     config.retryBaseMs = 600UL;
     config.retryMaxMs = 3000UL;
     config.retryJitterMs = 180UL;
-    config.idleLoopIntervalMs = 150UL;
+    config.idleLoopIntervalMs = 500UL;
     config.maxRetries = 2;
     config.queueWhenTransportDown = false;
     return config;
