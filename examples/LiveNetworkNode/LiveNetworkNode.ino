@@ -374,9 +374,6 @@ void setup() {
 
   ZeroWiFiMaintainer::Config wifiConfig;
 #if defined(ARDUINO_ARCH_ESP8266)
-  wifiConfig.retryBaseMs = 1500;
-  wifiConfig.retryMaxMs = 8000;
-  wifiConfig.retryJitterMs = 250;
   wifiConfig.stablePollMultiplier = 2;
 #endif
   wifiConfig.manageCapabilities = true;
