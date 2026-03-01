@@ -441,10 +441,14 @@ void setup() {
 
 #if defined(ARDUINO_ARCH_ESP8266)
   ZeroKernel.addTask("Sample", sampleTask, ZeroNetProfileEsp8266::kSampleTaskIntervalMs, 0);
-  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, ZeroNetProfileEsp8266::kWiFiTaskIntervalMs, 0);
-  ZeroKernel.addTask("HttpPump", httpPumpTask, ZeroNetProfileEsp8266::kHttpTaskIntervalMs, 0);
-  ZeroKernel.addTask("MqttPump", mqttPumpTask, ZeroNetProfileEsp8266::kMqttTaskIntervalMs, 0);
-  ZeroKernel.addTask("Dispatch", dispatchTask, ZeroNetProfileEsp8266::kDispatchTaskIntervalMs, 0);
+  ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, ZeroNetProfileEsp8266::kWiFiTaskIntervalMs,
+                     ZeroNetProfileEsp8266::kWiFiTaskStartDelayMs);
+  ZeroKernel.addTask("HttpPump", httpPumpTask, ZeroNetProfileEsp8266::kHttpTaskIntervalMs,
+                     ZeroNetProfileEsp8266::kHttpTaskStartDelayMs);
+  ZeroKernel.addTask("MqttPump", mqttPumpTask, ZeroNetProfileEsp8266::kMqttTaskIntervalMs,
+                     ZeroNetProfileEsp8266::kMqttTaskStartDelayMs);
+  ZeroKernel.addTask("Dispatch", dispatchTask, ZeroNetProfileEsp8266::kDispatchTaskIntervalMs,
+                     ZeroNetProfileEsp8266::kDispatchTaskStartDelayMs);
 #else
   ZeroKernel.addTask("Sample", sampleTask, kSampleTaskIntervalMs, 0);
   ZeroKernel.addTask("WiFiMaint", wifiMaintainerTask, 100, kWiFiMaintStartDelayMs);

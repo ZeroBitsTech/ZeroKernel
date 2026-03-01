@@ -117,7 +117,7 @@ Current target maturity:
 Recommended board-specific path:
 
 - **ESP32:** use the default network module configs first, then validate against your real endpoint.
-- **ESP8266 / Wemos:** start with `ZeroNetProfileEsp8266`. It is a BETA, MQTT-first constrained preset that disables periodic HTTP dispatch by default and prevents offline queue buildup so constrained boards do not need heavy manual tuning just to stay responsive.
+- **ESP8266 / Wemos:** start with `ZeroNetProfileEsp8266`. It is a BETA, MQTT-first constrained preset that disables periodic HTTP dispatch by default, prevents offline queue buildup, and staggers slower network task cadence so constrained boards do not need heavy manual tuning just to stay responsive.
 
 Current best module tradeoff reference (ESP32, `LEAN_NET`, manual pattern vs module pattern):
 

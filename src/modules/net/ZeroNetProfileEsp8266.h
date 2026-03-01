@@ -13,11 +13,16 @@ namespace net {
 // This profile intentionally prefers MQTT cadence over aggressive HTTP churn.
 struct ZeroNetProfileEsp8266 {
   static const unsigned long kSampleTaskIntervalMs = 100UL;
-  static const unsigned long kWiFiTaskIntervalMs = 100UL;
-  static const unsigned long kHttpTaskIntervalMs = 100UL;
-  static const unsigned long kMqttTaskIntervalMs = 100UL;
-  static const unsigned long kDispatchTaskIntervalMs = 100UL;
+  static const unsigned long kWiFiTaskIntervalMs = 250UL;
+  static const unsigned long kHttpTaskIntervalMs = 250UL;
+  static const unsigned long kMqttTaskIntervalMs = 500UL;
+  static const unsigned long kDispatchTaskIntervalMs = 250UL;
   static const unsigned long kReportTaskIntervalMs = 250UL;
+
+  static const unsigned long kWiFiTaskStartDelayMs = 25UL;
+  static const unsigned long kHttpTaskStartDelayMs = 75UL;
+  static const unsigned long kMqttTaskStartDelayMs = 125UL;
+  static const unsigned long kDispatchTaskStartDelayMs = 175UL;
 
   static const unsigned long kHttpDispatchPeriodMs = 0UL;
   static const unsigned long kMqttDispatchPeriodMs = 1000UL;
@@ -26,9 +31,9 @@ struct ZeroNetProfileEsp8266 {
   static ZeroWiFiMaintainer::Config wifiConfig() {
     ZeroWiFiMaintainer::Config config;
     config.pollIntervalMs = 1000UL;
-    config.retryBaseMs = 10000UL;
-    config.retryMaxMs = 30000UL;
-    config.retryJitterMs = 500UL;
+    config.retryBaseMs = 4000UL;
+    config.retryMaxMs = 12000UL;
+    config.retryJitterMs = 350UL;
     config.stablePollMultiplier = 4;
     config.stableThreshold = 6;
     return config;
