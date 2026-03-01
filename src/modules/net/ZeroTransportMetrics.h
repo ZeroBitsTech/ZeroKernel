@@ -68,6 +68,8 @@ class ZeroTransportMetrics {
     if (latencyMs > worstConnectLatencyMs_) {
       worstConnectLatencyMs_ = latencyMs;
     }
+#else
+    (void)latencyMs;
 #endif
 
     if (success) {
@@ -102,6 +104,9 @@ class ZeroTransportMetrics {
     if (queueDwellMs > worstQueueDwellMs_) {
       worstQueueDwellMs_ = queueDwellMs;
     }
+#else
+    (void)latencyMs;
+    (void)queueDwellMs;
 #endif
 
     if (success) {
